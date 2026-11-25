@@ -120,6 +120,8 @@ def send_otp_email(to_email, otp_code, purpose="registration"):
 def send_account_approved_email(to_email, user_name):
     """Notify user that their account was approved by administrator."""
     subject = "SmartLearn: Your Account Has Been Approved!"
+    base_url = current_app.config.get('APP_URL', 'http://localhost:5000').rstrip('/')
+    login_url = f"{base_url}/login"
     html = f"""
     <div style="font-family: sans-serif; background-color: #0f1117; color: #e2e8f0; padding: 30px;">
         <div style="max-width: 500px; margin: auto; background: #1a1d29; border-radius: 10px; padding: 25px; border: 1px solid rgba(255,255,255,0.1);">
@@ -127,11 +129,11 @@ def send_account_approved_email(to_email, user_name):
             <p>Hello {user_name},</p>
             <p>Great news! Your registration request has been reviewed and approved by the SmartLearn administrator.</p>
             <p>You can now log in and access your courses and learning dashboard.</p>
-            <p style="margin-top: 25px;"><a href="http://localhost:5001/login" style="background: #6c63ff; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In Now</a></p>
+            <p style="margin-top: 25px;"><a href="{login_url}" style="background: #6c63ff; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In Now</a></p>
         </div>
     </div>
     """
-    text = f"Hello {user_name},\nYour SmartLearn registration has been approved! You can now log in."
+    text = f"Hello {user_name},\nYour SmartLearn registration has been approved! You can now log in at: {login_url}"
     return send_email(to_email, subject, html, text)
 
 

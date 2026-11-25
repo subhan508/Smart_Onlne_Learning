@@ -148,7 +148,7 @@ def enroll_student():
         return redirect(url_for('teacher.dashboard'))
 
     # Verify user is a student
-    student = query_db('SELECT id, name FROM users WHERE id = ? AND role = "student"',
+    student = query_db("SELECT id, name FROM users WHERE id = ? AND role = 'student'",
                        [student_id], one=True)
     if not student:
         flash('Student not found.', 'danger')

@@ -25,6 +25,13 @@ def create_app(config_class=Config):
     os.makedirs(os.path.join(app.static_folder, 'images'), exist_ok=True)
 
     # -----------------------------------------------------------------------
+    # Reverse proxy support (for Render / HTTPS edge SSL termination)
+    # -----------------------------------------------------------------------
+    if os.environ.get('RENDER') or app.config.get('SESSION_COOKIE_SECURE'):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+    # -----------------------------------------------------------------------
     # Initialize SQLAlchemy ORM
     # -----------------------------------------------------------------------
     from database.models import db

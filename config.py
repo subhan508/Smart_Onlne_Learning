@@ -15,6 +15,10 @@ class Config:
     # Flask secret key — used for session signing
     SECRET_KEY = os.environ.get('SECRET_KEY', 'smartlearn-dev-secret-change-in-production')
 
+    # Environment & Host
+    FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
+    APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
+
     # Database
     DATABASE = os.environ.get('DATABASE', os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 'smart_learn.db'
@@ -29,6 +33,7 @@ class Config:
         SQLALCHEMY_DATABASE_URI = database_url
     else:
         SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE}"
+    DATABASE_URL = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Mail / SMTP Configuration
@@ -56,9 +61,9 @@ class Config:
     # Allowed file extensions for uploads
     ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'webm'}
 
-    # Emotion model path
+    # Emotion model path — defaults to scikit-learn pipeline (.joblib)
     MODEL_PATH = os.environ.get('MODEL_PATH', os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 'models', 'emotion_model.h5'
+        os.path.dirname(os.path.abspath(__file__)), 'models', 'emotion_model.joblib'
     ))
 
     # Haar Cascade path for face detection
@@ -68,7 +73,9 @@ class Config:
     EMOTION_DETECTION_INTERVAL = 3  # seconds between detections
     EMOTION_LABELS = ['Happy', 'Sad', 'Neutral', 'Confused', 'Bored', 'Focused']
 
-    # Session settings
+    # Session settings & HTTPS Cookies
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    # Enable secure cookies when running on Render or when explicitly set
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 'yes') or bool(os.environ.get('RENDER'))
     PERMANENT_SESSION_LIFETIME = 3600  # 1 hour

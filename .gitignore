@@ -22,12 +22,24 @@ venv.bak/
 *.pem
 *.key
 
-# SQLite Databases & Test artifacts
+# SQLite Databases & Local Test Artifacts
+*.db
+*.sqlite
+*.sqlite3
 test_*.db
 *.db-journal
 *.sqlite3-journal
+*.db-wal
+*.db-shm
 
-# OS files
+# Instance Folder
+instance/
+
+# Uploads (Keep folder tracked with .gitkeep, ignore uploaded files)
+uploads/*
+!uploads/.gitkeep
+
+# OS Files
 .DS_Store
 .DS_Store?
 ._*
@@ -36,12 +48,12 @@ test_*.db
 ehthumbs.db
 Thumbs.db
 
-# Large raw datasets
+# Large Raw Datasets
 fer2013.csv
 *.tar.gz
 *.zip
 
-# IDE & Editor files
+# IDE & Editor Files
 .vscode/
 .idea/
 *.swp
