@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ student.name }} — Analytics{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+    <div class="dashboard-header fade-in">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb" style="font-size: 0.85rem;">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item active">{{ student.name }}</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-person-lines-fill me-2" style="color: var(--accent);"></i>{{ student.name }}</h1>
+        <p class="subtitle">{{ student.email }} — Detailed learning and emotion analytics</p>
+        <p class="text-muted small">
+            <i class="bi bi-info-circle me-1"></i>
+            Emotion data is AI-estimated. Use as a supplementary indicator, not a definitive assessment.
+        </p>
+    </div>
+
+    <div class="row g-4">
+        <!-- Enrolled Courses -->
+        <div class="col-lg-4">
+            <div class="section-title">
+                <i class="bi bi-book"></i>Courses ({{ shared_courses | length }})
+            </div>
+            {% for course in shared_courses %}
+            <div class="glass-card mb-2">
+                <div class="card-body py-2">
+                    <span class="small fw-semibold">{{ course.title }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Emotion Distribution -->
+        <div class="col-lg-4">
+            <div class="section-title">
+                <i class="bi bi-pie-chart"></i>Emotion Distribution
+            </div>
+            <div class="glass-card">
+                <div class="card-body">
+                    {% if emotion_stats %}
+                    <canvas id="studentEmotionChart" height="220"></canvas>
+                    <div class="mt-3">
+                        {% for stat in emotion_stats %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="emotion-badge {{ stat.emotion | lower }}">
+                                <span class="emotion-dot {{ stat.emotion | lower }}"></span>
+                                {{ stat.emotion }}
+                            </span>
+                            <span class="text-muted small">{{ stat.count }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <p class="small mb-0">No emotion data available.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Quiz Performance -->
+        <div class="col-lg-4">
+            <div class="section-title">
+                <i class="bi bi-trophy"></i>Quiz History
+            </div>
+            <div class="glass-card">
+                <div class="card-body">
+                    {% if quiz_history %}
+                    {% for q in quiz_history %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2"
+                         {% if not loop.last %}style="border-bottom: 1px solid var(--glass-border);"{% endif %}>
+                        <div>
+                            <div class="small fw-semibold">{{ q.quiz_title }}</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">{{ q.course_title }}</div>
+                        </div>
+                        <div class="text-end">
+                            {% set pct = (q.score / q.total_marks * 100) | int if q.total_marks > 0 else 0 %}
+                            <span class="fw-bold {% if pct >= 70 %}text-success{% elif pct >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ q.score }}/{{ q.total_marks }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <p class="small mb-0">No quiz attempts yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Emotion Timeline -->
+        {% if emotion_timeline %}
+        <div class="col-12">
+            <div class="section-title">
+                <i class="bi bi-graph-up"></i>Emotion Timeline
+            </div>
+            <div class="glass-card">
+                <div class="card-body">
+                    <canvas id="studentTimelineChart" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    {% if emotion_stats %}
+    createEmotionPieChart('studentEmotionChart',
+        [{% for s in emotion_stats %}'{{ s.emotion }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        [{% for s in emotion_stats %}{{ s.count }}{% if not loop.last %}, {% endif %}{% endfor %}]
+    );
+    {% endif %}
+
+    {% if emotion_timeline %}
+    createEmotionTimelineChart('studentTimelineChart',
+        [{% for e in emotion_timeline | reverse %}'{{ e.timestamp }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        [{% for e in emotion_timeline | reverse %}'{{ e.emotion }}'{% if not loop.last %}, {% endif %}{% endfor %}]
+    );
+    {% endif %}
+</script>
+{% endblock %}

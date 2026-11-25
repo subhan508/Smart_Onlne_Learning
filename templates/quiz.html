@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 800px;">
+    <!-- Header -->
+    <div class="dashboard-header fade-in">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb" style="font-size: 0.85rem;">
+                <li class="breadcrumb-item"><a href="{{ url_for('learning.courses') }}">Courses</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('learning.course_detail', course_id=course.id) }}">{{ course.title }}</a></li>
+                <li class="breadcrumb-item active">{{ quiz.title }}</li>
+            </ol>
+        </nav>
+        <h1><i class="bi bi-patch-question-fill me-2" style="color: var(--accent);"></i>{{ quiz.title }}</h1>
+        {% if quiz.description %}
+        <p class="subtitle">{{ quiz.description }}</p>
+        {% endif %}
+        <p class="text-muted small">
+            <i class="bi bi-question-circle me-1"></i>{{ questions | length }} questions
+            &bull; Answer all questions and submit to see your score.
+        </p>
+    </div>
+
+    <!-- Previous Attempts -->
+    {% if attempts %}
+    <div class="glass-card mb-4">
+        <div class="card-header">
+            <i class="bi bi-clock-history me-2"></i>Previous Attempts
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-glass mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Score</th>
+                            <th>Percentage</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in attempts %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="fw-bold">{{ attempt.score }}/{{ attempt.total_marks }}</td>
+                            <td>
+                                {% set pct = (attempt.score / attempt.total_marks * 100) | int if attempt.total_marks > 0 else 0 %}
+                                <span class="{% if pct >= 70 %}text-success{% elif pct >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ pct }}%
+                                </span>
+                            </td>
+                            <td class="text-muted small">{{ attempt.attempted_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quiz Form -->
+    <form method="POST" action="{{ url_for('learning.submit_quiz', quiz_id=quiz.id) }}" id="quizForm">
+        {% for item in questions %}
+        <div class="quiz-question fade-in-card">
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <span class="d-flex align-items-center justify-content-center"
+                      style="width: 32px; height: 32px; border-radius: 8px; background: rgba(108,99,255,0.12); color: var(--primary); font-weight: 700; font-size: 0.9rem; flex-shrink: 0;">
+                    {{ loop.index }}
+                </span>
+                <h6 class="mb-0" style="line-height: 1.5;">{{ item.question.question_text }}</h6>
+            </div>
+
+            {% for option in item.options %}
+            <label class="quiz-option" for="q{{ item.question.id }}_o{{ option.id }}">
+                <input type="radio" name="question_{{ item.question.id }}"
+                       value="{{ option.id }}" id="q{{ item.question.id }}_o{{ option.id }}" required>
+                <span>{{ option.option_text }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {% if questions %}
+        <div class="text-center mt-4">
+            <button type="submit" class="btn btn-primary-gradient btn-lg px-5" id="submitQuizBtn">
+                <i class="bi bi-check2-circle me-2"></i>Submit Quiz
+            </button>
+        </div>
+        {% else %}
+        <div class="empty-state glass-card">
+            <i class="bi bi-patch-question"></i>
+            <h5>No questions</h5>
+            <p>This quiz doesn't have any questions yet.</p>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById('quizForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('submitQuizBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Submitting...';
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+    <!-- Header -->
+    <div class="dashboard-header fade-in">
+        <h1><i class="bi bi-shield-lock me-2" style="color: var(--accent);"></i>Admin Dashboard</h1>
+        <p class="subtitle">System overview — manage users, courses, and view platform-wide statistics.</p>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card primary fade-in-card">
+                <div class="stat-label">Total Users</div>
+                <div class="stat-value">{{ total_users }}</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card accent fade-in-card">
+                <div class="stat-label">Students</div>
+                <div class="stat-value">{{ total_students }}</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card info fade-in-card">
+                <div class="stat-label">Teachers</div>
+                <div class="stat-value">{{ total_teachers }}</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card success fade-in-card">
+                <div class="stat-label">Courses</div>
+                <div class="stat-value">{{ total_courses }}</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card warning fade-in-card">
+                <div class="stat-label">Lessons</div>
+                <div class="stat-value">{{ total_lessons }}</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="stat-card danger fade-in-card">
+                <div class="stat-label">Enrollments</div>
+                <div class="stat-value">{{ total_enrollments }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Quick Actions -->
+            <div class="d-flex gap-2 mb-4">
+                <a href="{{ url_for('admin.manage_users') }}" class="btn btn-primary-gradient btn-sm">
+                    <i class="bi bi-people me-1"></i>Manage Users
+                </a>
+                <a href="{{ url_for('admin.manage_courses') }}" class="btn btn-accent btn-sm">
+                    <i class="bi bi-collection me-1"></i>Manage Courses
+                </a>
+            </div>
+
+            <!-- Recent Users -->
+            <div class="section-title">
+                <i class="bi bi-person-plus"></i>Recent Registrations
+            </div>
+            <div class="glass-card mb-4">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-glass mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Joined</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in recent_users %}
+                                <tr>
+                                    <td class="fw-semibold">{{ user.name }}</td>
+                                    <td class="text-muted small">{{ user.email }}</td>
+                                    <td><span class="role-badge">{{ user.role }}</span></td>
+                                    <td>
+                                        {% if user.is_active %}
+                                            <span class="badge bg-success bg-opacity-25 text-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-danger bg-opacity-25 text-danger">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted small">{{ user.created_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Quiz Attempts -->
+            <div class="section-title">
+                <i class="bi bi-clipboard-data"></i>Recent Quiz Activity
+            </div>
+            <div class="glass-card">
+                <div class="card-body p-0">
+                    {% if recent_attempts %}
+                    <div class="table-responsive">
+                        <table class="table table-glass mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Quiz</th>
+                                    <th>Score</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for attempt in recent_attempts %}
+                                <tr>
+                                    <td class="fw-semibold">{{ attempt.student_name }}</td>
+                                    <td>{{ attempt.quiz_title }}</td>
+                                    <td>
+                                        {% set pct = (attempt.score / attempt.total_marks * 100) | int if attempt.total_marks > 0 else 0 %}
+                                        <span class="fw-bold {% if pct >= 70 %}text-success{% elif pct >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ attempt.score }}/{{ attempt.total_marks }}
+                                        </span>
+                                    </td>
+                                    <td class="text-muted small">{{ attempt.attempted_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <p class="mb-0">No quiz activity yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-4">
+            <!-- System Emotion Stats -->
+            <div class="section-title">
+                <i class="bi bi-pie-chart"></i>Platform Emotions
+            </div>
+            <div class="glass-card mb-4">
+                <div class="card-body">
+                    {% if emotion_dist %}
+                    <canvas id="adminEmotionChart" height="220"></canvas>
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        {{ total_emotion_logs }} total emotion detections across the platform.
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-bar-chart" style="font-size: 2rem; opacity: 0.3;"></i>
+                        <p class="small mt-2 mb-0">No emotion data yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Platform Summary -->
+            <div class="section-title">
+                <i class="bi bi-gear"></i>Platform Summary
+            </div>
+            <div class="glass-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2 pb-2" style="border-bottom: 1px solid var(--glass-border);">
+                        <span class="text-muted small">Total Quizzes</span>
+                        <span class="fw-bold">{{ total_quizzes }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 pb-2" style="border-bottom: 1px solid var(--glass-border);">
+                        <span class="text-muted small">Emotion Logs</span>
+                        <span class="fw-bold">{{ total_emotion_logs }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 pb-2" style="border-bottom: 1px solid var(--glass-border);">
+                        <span class="text-muted small">Admin Users</span>
+                        <span class="fw-bold">{{ total_admins }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted small">Active Enrollments</span>
+                        <span class="fw-bold">{{ total_enrollments }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    {% if emotion_dist %}
+    const emotionData = {
+        labels: [{% for s in emotion_dist %}'{{ s.emotion }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        counts: [{% for s in emotion_dist %}{{ s.count }}{% if not loop.last %}, {% endif %}{% endfor %}]
+    };
+    if (document.getElementById('adminEmotionChart')) {
+        createEmotionPieChart('adminEmotionChart', emotionData.labels, emotionData.counts);
+    }
+    {% endif %}
+</script>
+{% endblock %}

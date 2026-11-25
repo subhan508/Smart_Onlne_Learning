@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{% if lesson %}Edit Lesson{% else %}Add Lesson{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 800px;">
+    <div class="dashboard-header fade-in">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb" style="font-size: 0.85rem;">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.my_courses') }}">My Courses</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.edit_course', course_id=course.id) }}">{{ course.title }}</a></li>
+                <li class="breadcrumb-item active">{% if lesson %}Edit{% else %}Add{% endif %} Lesson</li>
+            </ol>
+        </nav>
+        <h1>
+            <i class="bi bi-{% if lesson %}pencil{% else %}plus-circle{% endif %} me-2" style="color: var(--accent);"></i>
+            {% if lesson %}Edit Lesson{% else %}Add New Lesson{% endif %}
+        </h1>
+    </div>
+
+    <div class="glass-card">
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-3">
+                    <label for="title" class="form-label">Lesson Title *</label>
+                    <input type="text" class="form-control" id="title" name="title"
+                           value="{{ lesson.title if lesson else '' }}" required
+                           placeholder="e.g. Introduction to Variables">
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <input type="text" class="form-control" id="description" name="description"
+                           value="{{ lesson.description if lesson else '' }}"
+                           placeholder="Brief description of this lesson">
+                </div>
+
+                <div class="mb-3">
+                    <label for="video_url" class="form-label">Video URL (YouTube Embed)</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-youtube"></i></span>
+                        <input type="url" class="form-control" id="video_url" name="video_url"
+                               value="{{ lesson.video_url if lesson else '' }}"
+                               placeholder="https://www.youtube.com/embed/VIDEO_ID">
+                    </div>
+                    <div class="form-text text-muted">
+                        Use the embed URL format: https://www.youtube.com/embed/VIDEO_ID
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="notes" class="form-label">Lesson Notes (supports basic HTML)</label>
+                    <textarea class="form-control" id="notes" name="notes" rows="12"
+                              placeholder="Write your lesson notes here. You can use basic HTML or plain text.">{{ lesson.notes if lesson else '' }}</textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary-gradient">
+                        <i class="bi bi-check-lg me-1"></i>{% if lesson %}Update{% else %}Add{% endif %} Lesson
+                    </button>
+                    <a href="{{ url_for('teacher.edit_course', course_id=course.id) }}" class="btn btn-glass">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

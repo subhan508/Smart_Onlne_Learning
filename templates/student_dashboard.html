@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+    <!-- Header -->
+    <div class="dashboard-header fade-in">
+        <h1><i class="bi bi-emoji-smile me-2" style="color: var(--accent);"></i>Welcome, {{ current_user.name }}!</h1>
+        <p class="subtitle">Track your learning progress, emotions, and performance all in one place.</p>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="stat-card primary fade-in-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Enrolled Courses</div>
+                        <div class="stat-value">{{ total_enrolled }}</div>
+                    </div>
+                    <div class="stat-icon primary"><i class="bi bi-book"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card accent fade-in-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Quizzes Taken</div>
+                        <div class="stat-value">{{ total_quizzes }}</div>
+                    </div>
+                    <div class="stat-icon accent"><i class="bi bi-patch-question"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card success fade-in-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Avg. Score</div>
+                        <div class="stat-value">{{ avg_score }}%</div>
+                    </div>
+                    <div class="stat-icon success"><i class="bi bi-graph-up-arrow"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card info fade-in-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label">Emotion Logs</div>
+                        <div class="stat-value">{{ emotion_stats | sum(attribute='count') if emotion_stats else 0 }}</div>
+                    </div>
+                    <div class="stat-icon info"><i class="bi bi-emoji-sunglasses"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Enrolled Courses -->
+        <div class="col-lg-8">
+            <div class="section-title">
+                <i class="bi bi-journal-bookmark-fill"></i>My Courses
+            </div>
+
+            {% if enrolled_courses %}
+            <div class="row g-3">
+                {% for course in enrolled_courses %}
+                <div class="col-md-6 fade-in-card">
+                    <div class="course-card">
+                        <div class="course-thumbnail">
+                            <i class="bi bi-book-half"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="course-category">{{ course.category or 'General' }}</div>
+                            <h5 class="course-title">{{ course.title }}</h5>
+                            <p class="course-desc">{{ course.description or 'No description available.' }}</p>
+
+                            <!-- Progress bar -->
+                            {% set total = course.total_lessons if course.total_lessons else 1 %}
+                            {% set pct = (course.completed_lessons / total * 100) | int %}
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small text-muted mb-1">
+                                    <span>Progress</span>
+                                    <span>{{ pct }}%</span>
+                                </div>
+                                <div class="progress-glass">
+                                    <div class="progress-bar" style="width: {{ pct }}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="course-meta">
+                                <span><i class="bi bi-person me-1"></i>{{ course.teacher_name }}</span>
+                                <span><i class="bi bi-collection-play me-1"></i>{{ course.total_lessons }} lessons</span>
+                            </div>
+
+                            <a href="{{ url_for('learning.course_detail', course_id=course.id) }}"
+                               class="btn btn-primary-gradient btn-sm mt-3 w-100">
+                                <i class="bi bi-play-circle me-1"></i>Continue Learning
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state glass-card">
+                <i class="bi bi-journal-x"></i>
+                <h5>No courses yet</h5>
+                <p>Browse available courses and start learning!</p>
+                <a href="{{ url_for('learning.courses') }}" class="btn btn-primary-gradient btn-sm">
+                    <i class="bi bi-search me-1"></i>Browse Courses
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-4">
+            <!-- Emotion Summary -->
+            <div class="section-title">
+                <i class="bi bi-emoji-expressionless"></i>Emotion Summary
+            </div>
+            <div class="glass-card mb-4">
+                <div class="card-body">
+                    {% if emotion_stats %}
+                    <canvas id="emotionPieChart" height="200"></canvas>
+                    <div class="mt-3">
+                        {% for stat in emotion_stats[:4] %}
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="emotion-badge {{ stat.emotion | lower }}">
+                                <span class="emotion-dot {{ stat.emotion | lower }}"></span>
+                                {{ stat.emotion }}
+                            </span>
+                            <span class="text-muted small">{{ stat.count }} times</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-webcam" style="font-size: 2rem; opacity: 0.3;"></i>
+                        <p class="small mt-2 mb-0">No emotion data yet.<br>Enable webcam during a lesson!</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Quiz Scores -->
+            <div class="section-title">
+                <i class="bi bi-trophy"></i>Recent Quizzes
+            </div>
+            <div class="glass-card mb-4">
+                <div class="card-body">
+                    {% if recent_quizzes %}
+                    {% for quiz in recent_quizzes %}
+                    <div class="d-flex align-items-center justify-content-between mb-3 {% if not loop.last %}pb-3{% endif %}"
+                         {% if not loop.last %}style="border-bottom: 1px solid var(--glass-border);"{% endif %}>
+                        <div>
+                            <div class="fw-semibold small">{{ quiz.quiz_title }}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">{{ quiz.course_title }}</div>
+                        </div>
+                        <div class="text-end">
+                            {% set pct = (quiz.score / quiz.total_marks * 100) | int if quiz.total_marks > 0 else 0 %}
+                            <span class="fw-bold {% if pct >= 70 %}text-success{% elif pct >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ quiz.score }}/{{ quiz.total_marks }}
+                            </span>
+                            <div class="text-muted" style="font-size: 0.7rem;">{{ pct }}%</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-pencil-square" style="font-size: 2rem; opacity: 0.3;"></i>
+                        <p class="small mt-2 mb-0">No quizzes taken yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            {% if recent_recs %}
+            <div class="section-title">
+                <i class="bi bi-lightbulb"></i>Recommendations
+            </div>
+            <div class="glass-card">
+                <div class="card-body">
+                    {% for rec in recent_recs %}
+                    <div class="recommendation-panel mb-2">
+                        <div class="d-flex gap-3">
+                            <div class="rec-icon">
+                                {% if rec.emotion == 'Confused' %}
+                                    <i class="bi bi-question-circle"></i>
+                                {% elif rec.emotion == 'Bored' %}
+                                    <i class="bi bi-emoji-dizzy"></i>
+                                {% elif rec.emotion == 'Sad' %}
+                                    <i class="bi bi-emoji-frown"></i>
+                                {% else %}
+                                    <i class="bi bi-lightbulb"></i>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <div class="small fw-semibold mb-1">{{ rec.emotion }} detected</div>
+                                <div class="text-muted small">{{ rec.recommendation }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- View Analytics Link -->
+            <a href="{{ url_for('student.analytics') }}" class="btn btn-glass w-100 mt-3">
+                <i class="bi bi-bar-chart me-2"></i>View Detailed Analytics
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    // Emotion pie chart
+    {% if emotion_stats %}
+    const emotionData = {
+        labels: [{% for s in emotion_stats %}'{{ s.emotion }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        counts: [{% for s in emotion_stats %}{{ s.count }}{% if not loop.last %}, {% endif %}{% endfor %}]
+    };
+    if (document.getElementById('emotionPieChart')) {
+        createEmotionPieChart('emotionPieChart', emotionData.labels, emotionData.counts);
+    }
+    {% endif %}
+</script>
+{% endblock %}

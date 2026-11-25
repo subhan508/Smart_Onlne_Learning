@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Create Quiz{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 800px;">
+    <div class="dashboard-header fade-in">
+        <h1><i class="bi bi-patch-question-fill me-2" style="color: var(--accent);"></i>Create Quiz</h1>
+        <p class="subtitle">Course: {{ course.title }}</p>
+    </div>
+
+    <form method="POST" id="quizCreateForm">
+        <!-- Quiz Info -->
+        <div class="glass-card mb-4">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="title" class="form-label">Quiz Title *</label>
+                    <input type="text" class="form-control" id="title" name="title" required
+                           placeholder="e.g. Python Basics Quiz">
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <input type="text" class="form-control" id="description" name="description"
+                           placeholder="Brief description of this quiz">
+                </div>
+                <div class="mb-3">
+                    <label for="lesson_id" class="form-label">Associated Lesson (optional)</label>
+                    <select class="form-select" id="lesson_id" name="lesson_id">
+                        <option value="">— No specific lesson —</option>
+                        {% for lesson in lessons %}
+                        <option value="{{ lesson.id }}">{{ lesson.order_number }}. {{ lesson.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Questions Container -->
+        <div class="section-title">
+            <i class="bi bi-list-ol"></i>Questions
+        </div>
+
+        <div id="questionsContainer">
+            <!-- Question 1 (default) -->
+            <div class="quiz-question mb-3" id="questionBlock_1">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">
+                        <span class="badge-glass me-2">Q1</span>Question
+                    </h6>
+                    <button type="button" class="btn btn-glass btn-sm text-danger" onclick="removeQuestion(1)" style="display: none;" id="removeBtn_1">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="question_1" required
+                           placeholder="Enter your question">
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <div class="input-group-text">
+                                <input type="radio" name="correct_1" value="1" required>
+                            </div>
+                            <input type="text" class="form-control" name="option_1_1" required placeholder="Option A">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <div class="input-group-text">
+                                <input type="radio" name="correct_1" value="2">
+                            </div>
+                            <input type="text" class="form-control" name="option_1_2" required placeholder="Option B">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <div class="input-group-text">
+                                <input type="radio" name="correct_1" value="3">
+                            </div>
+                            <input type="text" class="form-control" name="option_1_3" required placeholder="Option C">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <div class="input-group-text">
+                                <input type="radio" name="correct_1" value="4">
+                            </div>
+                            <input type="text" class="form-control" name="option_1_4" required placeholder="Option D">
+                        </div>
+                    </div>
+                </div>
+                <div class="text-muted small"><i class="bi bi-info-circle me-1"></i>Select the radio button next to the correct answer.</div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button type="button" class="btn btn-glass" id="addQuestionBtn" onclick="addQuestion()">
+                <i class="bi bi-plus-circle me-1"></i>Add Question
+            </button>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary-gradient btn-lg">
+                <i class="bi bi-check-circle me-1"></i>Create Quiz
+            </button>
+            <a href="{{ url_for('teacher.edit_course', course_id=course.id) }}" class="btn btn-glass btn-lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let questionCount = 1;
+
+    function addQuestion() {
+        questionCount++;
+        const container = document.getElementById('questionsContainer');
+        const html = `
+        <div class="quiz-question mb-3" id="questionBlock_${questionCount}">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><span class="badge-glass me-2">Q${questionCount}</span>Question</h6>
+                <button type="button" class="btn btn-glass btn-sm text-danger" onclick="removeQuestion(${questionCount})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="mb-3">
+                <input type="text" class="form-control" name="question_${questionCount}" required placeholder="Enter your question">
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <div class="input-group-text"><input type="radio" name="correct_${questionCount}" value="1" required></div>
+                        <input type="text" class="form-control" name="option_${questionCount}_1" required placeholder="Option A">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <div class="input-group-text"><input type="radio" name="correct_${questionCount}" value="2"></div>
+                        <input type="text" class="form-control" name="option_${questionCount}_2" required placeholder="Option B">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <div class="input-group-text"><input type="radio" name="correct_${questionCount}" value="3"></div>
+                        <input type="text" class="form-control" name="option_${questionCount}_3" required placeholder="Option C">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <div class="input-group-text"><input type="radio" name="correct_${questionCount}" value="4"></div>
+                        <input type="text" class="form-control" name="option_${questionCount}_4" required placeholder="Option D">
+                    </div>
+                </div>
+            </div>
+            <div class="text-muted small"><i class="bi bi-info-circle me-1"></i>Select the radio button next to the correct answer.</div>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+
+        // Show remove button for question 1 if more than 1 question
+        if (questionCount > 1) {
+            const rmBtn = document.getElementById('removeBtn_1');
+            if (rmBtn) rmBtn.style.display = '';
+        }
+    }
+
+    function removeQuestion(index) {
+        const block = document.getElementById(`questionBlock_${index}`);
+        if (block) block.remove();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{% if course %}Edit Course{% else %}New Course{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 900px;">
+    <div class="dashboard-header fade-in">
+        <h1>
+            <i class="bi bi-{% if course %}pencil-square{% else %}plus-circle{% endif %} me-2" style="color: var(--accent);"></i>
+            {% if course %}Edit Course: {{ course.title }}{% else %}Create New Course{% endif %}
+        </h1>
+    </div>
+
+    <!-- Course Form -->
+    <div class="glass-card mb-4">
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-3">
+                    <label for="title" class="form-label">Course Title *</label>
+                    <input type="text" class="form-control" id="title" name="title"
+                           value="{{ course.title if course else '' }}" required placeholder="e.g. Introduction to Python">
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="4"
+                              placeholder="Describe what students will learn...">{{ course.description if course else '' }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="category" class="form-label">Category</label>
+                    <input type="text" class="form-control" id="category" name="category"
+                           value="{{ course.category if course else 'General' }}" placeholder="e.g. Programming, Web Development">
+                </div>
+                <button type="submit" class="btn btn-primary-gradient">
+                    <i class="bi bi-check-lg me-1"></i>{% if course %}Update Course{% else %}Create Course{% endif %}
+                </button>
+                {% if course %}
+                <a href="{{ url_for('teacher.my_courses') }}" class="btn btn-glass ms-2">Cancel</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {% if course %}
+    <!-- Lessons Section -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="section-title mb-0">
+            <i class="bi bi-collection-play"></i>Lessons ({{ lessons | length if lessons else 0 }})
+        </div>
+        <a href="{{ url_for('teacher.add_lesson', course_id=course.id) }}" class="btn btn-accent btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Lesson
+        </a>
+    </div>
+
+    {% if lessons %}
+    {% for lesson in lessons %}
+    <div class="glass-card mb-2">
+        <div class="card-body py-2 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge-glass">{{ lesson.order_number }}</span>
+                <div>
+                    <span class="fw-semibold small">{{ lesson.title }}</span>
+                    {% if lesson.video_url %}
+                    <span class="text-muted small ms-2"><i class="bi bi-play-circle"></i> Video</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('teacher.edit_lesson', lesson_id=lesson.id) }}" class="btn btn-glass btn-sm">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                <form method="POST" action="{{ url_for('teacher.delete_lesson', lesson_id=lesson.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-glass btn-sm text-danger"
+                            data-confirm="Delete this lesson?">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="text-center text-muted py-3 glass-card mb-4">
+        <p class="mb-0 small">No lessons yet. Add your first lesson!</p>
+    </div>
+    {% endif %}
+
+    <!-- Quizzes Section -->
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+        <div class="section-title mb-0">
+            <i class="bi bi-patch-question"></i>Quizzes ({{ quizzes | length if quizzes else 0 }})
+        </div>
+        <a href="{{ url_for('teacher.create_quiz', course_id=course.id) }}" class="btn btn-accent btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Quiz
+        </a>
+    </div>
+
+    {% if quizzes %}
+    {% for quiz in quizzes %}
+    <div class="glass-card mb-2">
+        <div class="card-body py-2 d-flex align-items-center justify-content-between">
+            <span class="fw-semibold small">{{ quiz.title }}</span>
+            <form method="POST" action="{{ url_for('teacher.delete_quiz', quiz_id=quiz.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-glass btn-sm text-danger"
+                        data-confirm="Delete this quiz?">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="text-center text-muted py-3 glass-card">
+        <p class="mb-0 small">No quizzes yet.</p>
+    </div>
+    {% endif %}
+
+    <!-- Delete Course -->
+    <div class="mt-5 pt-4" style="border-top: 1px solid var(--glass-border);">
+        <h6 class="text-danger mb-3"><i class="bi bi-exclamation-triangle me-2"></i>Danger Zone</h6>
+        <form method="POST" action="{{ url_for('teacher.delete_course', course_id=course.id) }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm"
+                    data-confirm="Are you sure you want to delete this entire course? This cannot be undone.">
+                <i class="bi bi-trash me-1"></i>Delete Course
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
