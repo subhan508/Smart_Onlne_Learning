@@ -235,14 +235,18 @@ def test_ensure_database_initialized_idempotent(tmp_path):
 
 
 def test_user_schema_server_defaults_and_registration(tmp_path):
-    """Verify User model has server_default set for is_active and registration sets is_active=1."""
-    from database.models import User
+    """Verify User and EmailOTP models have server_defaults set and registration generates valid OTP record."""
+    from database.models import User, EmailOTP
     from database.database import query_db, init_db
 
     # Verify SQLAlchemy model column has server_default
     is_active_col = User.__table__.columns['is_active']
     assert is_active_col.server_default is not None
     assert str(is_active_col.server_default.arg) == '1'
+
+    attempts_col = EmailOTP.__table__.columns['attempts']
+    assert attempts_col.server_default is not None
+    assert str(attempts_col.server_default.arg) == '0'
 
     db_file = str(tmp_path / "test_reg.db")
     app = create_app()
@@ -271,6 +275,15 @@ def test_user_schema_server_defaults_and_registration(tmp_path):
         assert user is not None
         assert user['is_active'] == 1
         assert user['status'] == 'unverified'
+
+        # Verify OTP was inserted with attempts=0 and correct values
+        otp = query_db("SELECT * FROM email_otps WHERE email = ?", ['activetest@example.com'], one=True)
+        assert otp is not None
+        assert otp['attempts'] == 0
+        assert otp['max_attempts'] == 5
+        assert otp['is_used'] == 0
+        assert otp['otp_type'] == 'registration'
+
 
 
 

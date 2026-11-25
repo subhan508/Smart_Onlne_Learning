@@ -262,6 +262,36 @@ def _migrate_existing_columns(db):
                 if 'rejection_reason' not in course_cols:
                     db.execute("ALTER TABLE courses ADD COLUMN rejection_reason TEXT DEFAULT NULL")
 
+            cur = db.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'email_otps'
+            """)
+            otp_cols = {row['column_name'] for row in cur.fetchall()}
+            if otp_cols:
+                if 'attempts' in otp_cols:
+                    try:
+                        db.execute("ALTER TABLE email_otps ALTER COLUMN attempts SET DEFAULT 0")
+                        db.execute("UPDATE email_otps SET attempts = 0 WHERE attempts IS NULL")
+                    except Exception:
+                        pass
+                if 'max_attempts' in otp_cols:
+                    try:
+                        db.execute("ALTER TABLE email_otps ALTER COLUMN max_attempts SET DEFAULT 5")
+                        db.execute("UPDATE email_otps SET max_attempts = 5 WHERE max_attempts IS NULL")
+                    except Exception:
+                        pass
+                if 'is_used' in otp_cols:
+                    try:
+                        db.execute("ALTER TABLE email_otps ALTER COLUMN is_used SET DEFAULT 0")
+                        db.execute("UPDATE email_otps SET is_used = 0 WHERE is_used IS NULL")
+                    except Exception:
+                        pass
+                if 'otp_type' in otp_cols:
+                    try:
+                        db.execute("ALTER TABLE email_otps ALTER COLUMN otp_type SET DEFAULT 'registration'")
+                    except Exception:
+                        pass
+
             db.commit()
         else:
             # SQLite migration check
@@ -289,6 +319,17 @@ def _migrate_existing_columns(db):
                     db.execute("ALTER TABLE courses ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
                 if 'rejection_reason' not in course_cols:
                     db.execute("ALTER TABLE courses ADD COLUMN rejection_reason TEXT DEFAULT NULL")
+
+            # Check email_otps table columns
+            cur = db.execute("PRAGMA table_info(email_otps)")
+            otp_cols = {row['name'] for row in cur.fetchall()}
+            if otp_cols:
+                if 'attempts' not in otp_cols:
+                    db.execute("ALTER TABLE email_otps ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
+                if 'max_attempts' not in otp_cols:
+                    db.execute("ALTER TABLE email_otps ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 5")
+                if 'is_used' not in otp_cols:
+                    db.execute("ALTER TABLE email_otps ADD COLUMN is_used INTEGER NOT NULL DEFAULT 0")
 
             db.commit()
     except Exception as err:

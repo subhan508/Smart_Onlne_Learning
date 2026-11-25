@@ -66,8 +66,8 @@ def create_and_send_otp(email, user_id=None, otp_type="registration"):
     expires_at = now + timedelta(minutes=expiry_minutes)
 
     execute_db('''
-        INSERT INTO email_otps (user_id, email, otp_code_hash, otp_type, expires_at, max_attempts, is_used, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        INSERT INTO email_otps (user_id, email, otp_code_hash, otp_type, expires_at, attempts, max_attempts, is_used, created_at)
+        VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?)
     ''', [user_id, email, code_hash, otp_type, expires_at, max_attempts, now])
 
     # 4. Dispatch Email

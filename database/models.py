@@ -42,11 +42,11 @@ class EmailOTP(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     email = db.Column(db.String(150), nullable=False, index=True)
     otp_code_hash = db.Column(db.String(255), nullable=False)
-    otp_type = db.Column(db.String(30), nullable=False, default='registration')  # 'registration', 'password_reset'
+    otp_type = db.Column(db.String(30), nullable=False, default='registration', server_default='registration')  # 'registration', 'password_reset'
     expires_at = db.Column(db.DateTime, nullable=False)
-    attempts = db.Column(db.Integer, nullable=False, default=0)
-    max_attempts = db.Column(db.Integer, nullable=False, default=5)
-    is_used = db.Column(db.Integer, nullable=False, default=0)
+    attempts = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    max_attempts = db.Column(db.Integer, nullable=False, default=5, server_default='5')
+    is_used = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
