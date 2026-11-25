@@ -104,11 +104,11 @@ def register():
                 flash(err, 'danger')
             return render_template('register.html', name=name, email=email, role=role)
 
-        # Create user in 'unverified' status
+        # Create user in 'unverified' status with active flag (is_active=1)
         password_hash = generate_password_hash(password)
         user_id = execute_db(
-            'INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?)',
-            (name, email, password_hash, role, 'unverified')
+            'INSERT INTO users (name, email, password_hash, role, status, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+            (name, email, password_hash, role, 'unverified', 1)
         )
 
         # Generate and dispatch 6-digit OTP code

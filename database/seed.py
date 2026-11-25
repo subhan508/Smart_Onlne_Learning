@@ -29,7 +29,7 @@ def seed_all(app):
             existing = db.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
             if not existing:
                 db.execute(
-                    "INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, ?, 'approved')",
+                    "INSERT INTO users (name, email, password_hash, role, status, is_active) VALUES (?, ?, ?, ?, 'approved', 1)",
                     (name, email, pw, role)
                 )
 

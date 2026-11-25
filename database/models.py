@@ -16,12 +16,12 @@ class User(db.Model):
     name = db.Column(db.String(150), nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='student')  # 'student', 'teacher', 'admin'
-    status = db.Column(db.String(20), nullable=False, default='approved', index=True)  # 'unverified', 'pending_approval', 'approved', 'rejected', 'suspended'
+    role = db.Column(db.String(20), nullable=False, default='student', server_default='student')  # 'student', 'teacher', 'admin'
+    status = db.Column(db.String(20), nullable=False, default='approved', server_default='approved', index=True)  # 'unverified', 'pending_approval', 'approved', 'rejected', 'suspended'
     rejection_reason = db.Column(db.Text, nullable=True)
-    is_active = db.Column(db.Integer, nullable=False, default=1)
+    is_active = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     profile_image = db.Column(db.String(255), nullable=True)
-    streak_days = db.Column(db.Integer, nullable=False, default=0)
+    streak_days = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     last_active_date = db.Column(db.Date, nullable=True)
     last_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

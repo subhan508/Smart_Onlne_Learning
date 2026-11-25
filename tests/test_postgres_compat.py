@@ -233,3 +233,44 @@ def test_ensure_database_initialized_idempotent(tmp_path):
         users2 = query_db("SELECT COUNT(*) as cnt FROM users", one=True)
         assert users2['cnt'] == first_count
 
+
+def test_user_schema_server_defaults_and_registration(tmp_path):
+    """Verify User model has server_default set for is_active and registration sets is_active=1."""
+    from database.models import User
+    from database.database import query_db, init_db
+
+    # Verify SQLAlchemy model column has server_default
+    is_active_col = User.__table__.columns['is_active']
+    assert is_active_col.server_default is not None
+    assert str(is_active_col.server_default.arg) == '1'
+
+    db_file = str(tmp_path / "test_reg.db")
+    app = create_app()
+    app.config['DATABASE'] = db_file
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file}"
+    app.config['TESTING'] = True
+
+    with app.app_context():
+        init_db(app)
+
+    test_client = app.test_client()
+
+    # Register a new user
+    response = test_client.post('/register', data={
+        'name': 'Active Test User',
+        'email': 'activetest@example.com',
+        'password': 'SecurePassword123!',
+        'confirm_password': 'SecurePassword123!',
+        'role': 'student'
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    # Query directly from DB to verify is_active value in table
+    with app.app_context():
+        user = query_db("SELECT * FROM users WHERE email = ?", ['activetest@example.com'], one=True)
+        assert user is not None
+        assert user['is_active'] == 1
+        assert user['status'] == 'unverified'
+
+
+

@@ -232,10 +232,24 @@ def _migrate_existing_columns(db):
                     db.execute("ALTER TABLE users ADD COLUMN rejection_reason TEXT DEFAULT NULL")
                 if 'streak_days' not in user_cols:
                     db.execute("ALTER TABLE users ADD COLUMN streak_days INTEGER NOT NULL DEFAULT 0")
+                else:
+                    try:
+                        db.execute("ALTER TABLE users ALTER COLUMN streak_days SET DEFAULT 0")
+                        db.execute("UPDATE users SET streak_days = 0 WHERE streak_days IS NULL")
+                    except Exception:
+                        pass
                 if 'last_active_date' not in user_cols:
                     db.execute("ALTER TABLE users ADD COLUMN last_active_date DATE DEFAULT NULL")
                 if 'last_login' not in user_cols:
                     db.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP DEFAULT NULL")
+                if 'is_active' not in user_cols:
+                    db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+                else:
+                    try:
+                        db.execute("ALTER TABLE users ALTER COLUMN is_active SET DEFAULT 1")
+                        db.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
+                    except Exception:
+                        pass
 
             cur = db.execute("""
                 SELECT column_name FROM information_schema.columns 
@@ -264,6 +278,8 @@ def _migrate_existing_columns(db):
                     db.execute("ALTER TABLE users ADD COLUMN last_active_date DATE DEFAULT NULL")
                 if 'last_login' not in user_cols:
                     db.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP DEFAULT NULL")
+                if 'is_active' not in user_cols:
+                    db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
 
             # Check courses table columns
             cur = db.execute("PRAGMA table_info(courses)")
