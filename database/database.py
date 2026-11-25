@@ -392,15 +392,21 @@ def ensure_database_initialized(app):
         try:
             init_db(app)
 
-            # Auto-seed if database is fresh (no users exist)
+            # Ensure essential courses and curriculum exist safely and idempotently
             try:
+                course_check = query_db("SELECT COUNT(*) as cnt FROM courses", one=True)
                 user_check = query_db("SELECT COUNT(*) as cnt FROM users", one=True)
-                if user_check and user_check['cnt'] == 0:
+                if not course_check or course_check['cnt'] == 0 or not user_check or user_check['cnt'] == 0:
+                    print("[INFO] Restoring missing courses and curriculum...")
                     from database.seed import seed_all
                     seed_all(app)
-                    print("[INFO] Fresh database detected. Seeded default admin, teachers, students, and demo courses.")
+                    print("[INFO] Courses and demonstration curriculum restored successfully.")
+                else:
+                    # Idempotent verification to ensure all core courses are published
+                    from database.seed import seed_all
+                    seed_all(app)
             except Exception as seed_err:
-                print(f"[DB Warning] Auto-seed check notice: {seed_err}")
+                print(f"[DB Warning] Course restoration check notice: {seed_err}")
 
             print("[INFO] Database initialization and schema verification complete.")
         except Exception as err:

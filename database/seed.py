@@ -36,11 +36,25 @@ def seed_all(app):
 
         db.commit()
 
-        # Fetch IDs
-        teacher1 = db.execute("SELECT id FROM users WHERE email = 'teacher@smartlearn.com'").fetchone()['id']
-        teacher2 = db.execute("SELECT id FROM users WHERE email = 'teacher2@smartlearn.com'").fetchone()['id']
-        student1 = db.execute("SELECT id FROM users WHERE email = 'student@smartlearn.com'").fetchone()['id']
-        student2 = db.execute("SELECT id FROM users WHERE email = 'maria@smartlearn.com'").fetchone()['id']
+        # Fetch IDs safely with robust fallbacks
+        t1_row = db.execute("SELECT id FROM users WHERE email = 'teacher@smartlearn.com'").fetchone()
+        t2_row = db.execute("SELECT id FROM users WHERE email = 'teacher2@smartlearn.com'").fetchone()
+        s1_row = db.execute("SELECT id FROM users WHERE email = 'student@smartlearn.com'").fetchone()
+        s2_row = db.execute("SELECT id FROM users WHERE email = 'maria@smartlearn.com'").fetchone()
+        demo_row = db.execute("SELECT id FROM users WHERE email = 'demo@smartlearn.com'").fetchone()
+
+        teacher1 = t1_row['id'] if t1_row else None
+        teacher2 = t2_row['id'] if t2_row else None
+        student1 = s1_row['id'] if s1_row else None
+        student2 = s2_row['id'] if s2_row else None
+        demo_id = demo_row['id'] if demo_row else None
+
+        # Fallback to any teacher or admin if specific emails are not present
+        if not teacher1:
+            any_teacher = db.execute("SELECT id FROM users WHERE role IN ('teacher', 'admin') ORDER BY id ASC LIMIT 1").fetchone()
+            teacher1 = any_teacher['id'] if any_teacher else 1
+        if not teacher2:
+            teacher2 = teacher1
 
         # ------------------------------------------------------------------
         # 2. Demo Courses
@@ -61,25 +75,32 @@ def seed_all(app):
         ]
 
         for title, desc, tid, cat, pub in courses_data:
-            existing = db.execute('SELECT id FROM courses WHERE title = ?', (title,)).fetchone()
+            existing = db.execute('SELECT id, is_published, approval_status FROM courses WHERE title = ?', (title,)).fetchone()
             if not existing:
                 db.execute(
-                    'INSERT INTO courses (title, description, teacher_id, category, is_published) VALUES (?, ?, ?, ?, ?)',
-                    (title, desc, tid, cat, pub)
+                    'INSERT INTO courses (title, description, teacher_id, category, is_published, approval_status) VALUES (?, ?, ?, ?, ?, ?)',
+                    (title, desc, tid, cat, pub, 'approved')
+                )
+            else:
+                # Ensure existing courses are active, approved, and published so they appear on all student/teacher views
+                db.execute(
+                    "UPDATE courses SET is_published = 1, approval_status = 'approved' WHERE id = ?",
+                    (existing['id'],)
                 )
 
         db.commit()
 
-        # Fetch course IDs
+        # Fetch course IDs safely
         course_ids = {}
         for title, *_ in courses_data:
             row = db.execute('SELECT id FROM courses WHERE title = ?', (title,)).fetchone()
-            course_ids[title] = row['id']
+            if row:
+                course_ids[title] = row['id']
 
-        python_id = course_ids['Introduction to Python Programming']
-        dsa_id = course_ids['Data Structures and Algorithms']
-        web_id = course_ids['Web Development Fundamentals']
-        ml_id = course_ids['Machine Learning Basics']
+        python_id = course_ids.get('Introduction to Python Programming')
+        dsa_id = course_ids.get('Data Structures and Algorithms')
+        web_id = course_ids.get('Web Development Fundamentals')
+        ml_id = course_ids.get('Machine Learning Basics')
 
         # ------------------------------------------------------------------
         # 3. Demo Lessons
@@ -146,13 +167,14 @@ def seed_all(app):
         # ------------------------------------------------------------------
         # 4. Demo Enrollments
         # ------------------------------------------------------------------
-        enrollments = [
-            (student1, python_id),
-            (student1, dsa_id),
-            (student1, ml_id),
-            (student2, python_id),
-            (student2, web_id),
-        ]
+        enrollments = []
+        if student1 and python_id: enrollments.append((student1, python_id))
+        if student1 and dsa_id: enrollments.append((student1, dsa_id))
+        if student1 and ml_id: enrollments.append((student1, ml_id))
+        if student2 and python_id: enrollments.append((student2, python_id))
+        if student2 and web_id: enrollments.append((student2, web_id))
+        if demo_id and python_id: enrollments.append((demo_id, python_id))
+        if demo_id and web_id: enrollments.append((demo_id, web_id))
 
         for sid, cid in enrollments:
             existing = db.execute(
@@ -170,119 +192,122 @@ def seed_all(app):
         # ------------------------------------------------------------------
         # 5. Demo Quizzes with Questions & Options
         # ------------------------------------------------------------------
-        # Get first lesson of Python course
-        py_lesson1 = db.execute(
-            'SELECT id FROM lessons WHERE course_id = ? ORDER BY order_number LIMIT 1',
-            (python_id,)
-        ).fetchone()['id']
+        if python_id:
+            py_l1_row = db.execute(
+                'SELECT id FROM lessons WHERE course_id = ? ORDER BY order_number LIMIT 1',
+                (python_id,)
+            ).fetchone()
+            py_lesson1 = py_l1_row['id'] if py_l1_row else None
 
-        existing_quiz = db.execute(
-            'SELECT id FROM quizzes WHERE course_id = ? AND title = ?',
-            (python_id, 'Python Basics Quiz')
-        ).fetchone()
+            existing_quiz = db.execute(
+                'SELECT id FROM quizzes WHERE course_id = ? AND title = ?',
+                (python_id, 'Python Basics Quiz')
+            ).fetchone()
 
-        if not existing_quiz:
-            quiz_id = db.execute(
-                'INSERT INTO quizzes (course_id, lesson_id, title, description) VALUES (?, ?, ?, ?)',
-                (python_id, py_lesson1, 'Python Basics Quiz',
-                 'Test your understanding of Python fundamentals.')
-            ).lastrowid
-
-            questions_data = [
-                ('What is the correct way to declare a variable in Python?', [
-                    ('var x = 10', False),
-                    ('int x = 10', False),
-                    ('x = 10', True),
-                    ('declare x = 10', False),
-                ]),
-                ('Which of the following is a valid Python data type?', [
-                    ('character', False),
-                    ('string', False),
-                    ('str', True),
-                    ('text', False),
-                ]),
-                ('What does the print() function do?', [
-                    ('Reads input from the user', False),
-                    ('Displays output to the console', True),
-                    ('Saves data to a file', False),
-                    ('Creates a new variable', False),
-                ]),
-                ('Which keyword is used to define a function in Python?', [
-                    ('function', False),
-                    ('func', False),
-                    ('define', False),
-                    ('def', True),
-                ]),
-                ('What is the output of: print(type(3.14))?', [
-                    ("<class 'int'>", False),
-                    ("<class 'float'>", True),
-                    ("<class 'str'>", False),
-                    ("<class 'double'>", False),
-                ]),
-            ]
-
-            for i, (q_text, opts) in enumerate(questions_data, 1):
-                q_id = db.execute(
-                    'INSERT INTO questions (quiz_id, question_text, order_number) VALUES (?, ?, ?)',
-                    (quiz_id, q_text, i)
+            if not existing_quiz and py_lesson1:
+                quiz_id = db.execute(
+                    'INSERT INTO quizzes (course_id, lesson_id, title, description) VALUES (?, ?, ?, ?)',
+                    (python_id, py_lesson1, 'Python Basics Quiz',
+                     'Test your understanding of Python fundamentals.')
                 ).lastrowid
 
-                for opt_text, is_correct in opts:
-                    db.execute(
-                        'INSERT INTO options (question_id, option_text, is_correct) VALUES (?, ?, ?)',
-                        (q_id, opt_text, int(is_correct))
-                    )
+                questions_data = [
+                    ('What is the correct way to declare a variable in Python?', [
+                        ('var x = 10', False),
+                        ('int x = 10', False),
+                        ('x = 10', True),
+                        ('declare x = 10', False),
+                    ]),
+                    ('Which of the following is a valid Python data type?', [
+                        ('character', False),
+                        ('string', False),
+                        ('str', True),
+                        ('text', False),
+                    ]),
+                    ('What does the print() function do?', [
+                        ('Reads input from the user', False),
+                        ('Displays output to the console', True),
+                        ('Saves data to a file', False),
+                        ('Creates a new variable', False),
+                    ]),
+                    ('Which keyword is used to define a function in Python?', [
+                        ('function', False),
+                        ('func', False),
+                        ('define', False),
+                        ('def', True),
+                    ]),
+                    ('What is the output of: print(type(3.14))?', [
+                        ("<class 'int'>", False),
+                        ("<class 'float'>", True),
+                        ("<class 'str'>", False),
+                        ("<class 'double'>", False),
+                    ]),
+                ]
+
+                for i, (q_text, opts) in enumerate(questions_data, 1):
+                    q_id = db.execute(
+                        'INSERT INTO questions (quiz_id, question_text, order_number) VALUES (?, ?, ?)',
+                        (quiz_id, q_text, i)
+                    ).lastrowid
+
+                    for opt_text, is_correct in opts:
+                        db.execute(
+                            'INSERT INTO options (question_id, option_text, is_correct) VALUES (?, ?, ?)',
+                            (q_id, opt_text, int(is_correct))
+                        )
 
         # Second quiz for DSA
-        dsa_lesson1 = db.execute(
-            'SELECT id FROM lessons WHERE course_id = ? ORDER BY order_number LIMIT 1',
-            (dsa_id,)
-        ).fetchone()['id']
+        if dsa_id:
+            dsa_l1_row = db.execute(
+                'SELECT id FROM lessons WHERE course_id = ? ORDER BY order_number LIMIT 1',
+                (dsa_id,)
+            ).fetchone()
+            dsa_lesson1 = dsa_l1_row['id'] if dsa_l1_row else None
 
-        existing_quiz2 = db.execute(
-            'SELECT id FROM quizzes WHERE course_id = ? AND title = ?',
-            (dsa_id, 'Arrays & Lists Quiz')
-        ).fetchone()
+            existing_quiz2 = db.execute(
+                'SELECT id FROM quizzes WHERE course_id = ? AND title = ?',
+                (dsa_id, 'Arrays & Lists Quiz')
+            ).fetchone()
 
-        if not existing_quiz2:
-            quiz_id2 = db.execute(
-                'INSERT INTO quizzes (course_id, lesson_id, title, description) VALUES (?, ?, ?, ?)',
-                (dsa_id, dsa_lesson1, 'Arrays & Lists Quiz',
-                 'Test your knowledge of arrays and list operations.')
-            ).lastrowid
-
-            questions_data2 = [
-                ('What is the time complexity of accessing an element in an array by index?', [
-                    ('O(n)', False),
-                    ('O(1)', True),
-                    ('O(log n)', False),
-                    ('O(n²)', False),
-                ]),
-                ('Which Python method adds an element to the end of a list?', [
-                    ('insert()', False),
-                    ('add()', False),
-                    ('append()', True),
-                    ('push()', False),
-                ]),
-                ('What is the main advantage of linked lists over arrays?', [
-                    ('Faster access by index', False),
-                    ('Less memory usage', False),
-                    ('Dynamic size and efficient insertion/deletion', True),
-                    ('Better cache performance', False),
-                ]),
-            ]
-
-            for i, (q_text, opts) in enumerate(questions_data2, 1):
-                q_id = db.execute(
-                    'INSERT INTO questions (quiz_id, question_text, order_number) VALUES (?, ?, ?)',
-                    (quiz_id2, q_text, i)
+            if not existing_quiz2 and dsa_lesson1:
+                quiz_id2 = db.execute(
+                    'INSERT INTO quizzes (course_id, lesson_id, title, description) VALUES (?, ?, ?, ?)',
+                    (dsa_id, dsa_lesson1, 'Arrays & Lists Quiz',
+                     'Test your knowledge of arrays and list operations.')
                 ).lastrowid
 
-                for opt_text, is_correct in opts:
-                    db.execute(
-                        'INSERT INTO options (question_id, option_text, is_correct) VALUES (?, ?, ?)',
-                        (q_id, opt_text, int(is_correct))
-                    )
+                questions_data2 = [
+                    ('What is the time complexity of accessing an element in an array by index?', [
+                        ('O(n)', False),
+                        ('O(1)', True),
+                        ('O(log n)', False),
+                        ('O(n²)', False),
+                    ]),
+                    ('Which Python method adds an element to the end of a list?', [
+                        ('insert()', False),
+                        ('add()', False),
+                        ('append()', True),
+                        ('push()', False),
+                    ]),
+                    ('What is the main advantage of linked lists over arrays?', [
+                        ('Faster access by index', False),
+                        ('Less memory usage', False),
+                        ('Dynamic size and efficient insertion/deletion', True),
+                        ('Better cache performance', False),
+                    ]),
+                ]
+
+                for i, (q_text, opts) in enumerate(questions_data2, 1):
+                    q_id = db.execute(
+                        'INSERT INTO questions (quiz_id, question_text, order_number) VALUES (?, ?, ?)',
+                        (quiz_id2, q_text, i)
+                    ).lastrowid
+
+                    for opt_text, is_correct in opts:
+                        db.execute(
+                            'INSERT INTO options (question_id, option_text, is_correct) VALUES (?, ?, ?)',
+                            (q_id, opt_text, int(is_correct))
+                        )
 
         db.commit()
         close_db()
