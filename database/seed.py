@@ -23,6 +23,7 @@ def seed_all(app):
             ('Alex Student', 'student@smartlearn.com', generate_password_hash('student123'), 'student'),
             ('Maria Garcia', 'maria@smartlearn.com', generate_password_hash('student123'), 'student'),
             ('James Wilson', 'james@smartlearn.com', generate_password_hash('student123'), 'student'),
+            ('Demo Student', 'demo@smartlearn.com', generate_password_hash('Demo1234!'), 'student'),
         ]
 
         for name, email, pw, role in users:

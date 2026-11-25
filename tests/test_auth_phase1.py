@@ -361,3 +361,82 @@ class TestResendEmailService:
             assert "RESEND_API_KEY is not configured" in msg
             assert "Render Dashboard" in msg
 
+
+class TestSecureDemoMode:
+    """Verify temporary secure demo mode OTP bypass and strict access gating."""
+
+    def test_demo_mode_disabled_by_default(self, app, client):
+        """When DEMO_MODE is False (default), demo account goes through normal OTP flow."""
+        app.config['DEMO_MODE'] = False
+        app.config['DEMO_ACCOUNT_EMAIL'] = 'demo@smartlearn.com'
+
+        response = client.post('/register', data={
+            'name': 'Demo User',
+            'email': 'demo@smartlearn.com',
+            'password': 'StrongP@ss123!',
+            'confirm_password': 'StrongP@ss123!',
+            'role': 'student'
+        }, follow_redirects=True)
+
+        assert response.status_code == 200
+        assert b'Verify Your Email' in response.data
+        with app.app_context():
+            user = query_db("SELECT status FROM users WHERE email = 'demo@smartlearn.com'", one=True)
+            assert user['status'] == 'unverified'
+
+    def test_demo_mode_active_bypasses_otp_for_designated_account_only(self, app, client):
+        """When DEMO_MODE is True, designated demo account registers and logs in immediately."""
+        app.config['DEMO_MODE'] = True
+        app.config['DEMO_ACCOUNT_EMAIL'] = 'demo@smartlearn.com'
+
+        # 1. Designated demo account registers -> auto-approved and logged in
+        response = client.post('/register', data={
+            'name': 'Demo User',
+            'email': 'demo@smartlearn.com',
+            'password': 'StrongP@ss123!',
+            'confirm_password': 'StrongP@ss123!',
+            'role': 'student'
+        }, follow_redirects=True)
+
+        assert response.status_code == 200
+        assert b'Demo mode active' in response.data
+        with app.app_context():
+            user = query_db("SELECT status FROM users WHERE email = 'demo@smartlearn.com'", one=True)
+            assert user['status'] == 'approved'
+
+        # Log out before testing arbitrary account registration
+        client.get('/logout')
+
+        # 2. Arbitrary account STILL requires normal OTP verification!
+        other_response = client.post('/register', data={
+            'name': 'Other User',
+            'email': 'other@example.com',
+            'password': 'StrongP@ss123!',
+            'confirm_password': 'StrongP@ss123!',
+            'role': 'student'
+        }, follow_redirects=True)
+
+        assert other_response.status_code == 200
+        assert b'Verify Your Email' in other_response.data
+        with app.app_context():
+            other = query_db("SELECT status FROM users WHERE email = 'other@example.com'", one=True)
+            assert other['status'] == 'unverified'
+
+    def test_demo_mode_login_requires_valid_password(self, app, client):
+        """Demo mode still enforces strict password authentication."""
+        app.config['DEMO_MODE'] = True
+        app.config['DEMO_ACCOUNT_EMAIL'] = 'demo@smartlearn.com'
+
+        with app.app_context():
+            pwd_hash = generate_password_hash('CorrectP@ss123!')
+            execute_db("INSERT INTO users (name, email, password_hash, role, status) VALUES ('Demo', 'demo@smartlearn.com', ?, 'student', 'unverified')", [pwd_hash])
+
+        # Wrong password fails
+        bad_login = client.post('/login', data={'email': 'demo@smartlearn.com', 'password': 'WrongPassword!'}, follow_redirects=True)
+        assert b'Invalid email or password' in bad_login.data
+
+        # Correct password succeeds and grants access
+        good_login = client.post('/login', data={'email': 'demo@smartlearn.com', 'password': 'CorrectP@ss123!'}, follow_redirects=True)
+        assert b'Demo mode active: Logged in' in good_login.data
+
+

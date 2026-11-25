@@ -114,6 +114,10 @@ class Config:
         os.path.dirname(os.path.abspath(__file__)), 'models', 'emotion_model.joblib'
     ))
 
+    # Secure Demo Mode (Temporary OTP bypass for designated demo account only)
+    DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() in ('true', '1', 'yes')
+    DEMO_ACCOUNT_EMAIL = os.environ.get('DEMO_ACCOUNT_EMAIL', 'demo@smartlearn.com').lower().strip()
+
     # Haar Cascade path for face detection
     HAAR_CASCADE_PATH = os.environ.get('HAAR_CASCADE_PATH', None)  # Uses OpenCV default if None
 

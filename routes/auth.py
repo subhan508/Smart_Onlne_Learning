@@ -6,7 +6,7 @@ Includes role-based and approval-based access control decorators.
 
 from functools import wraps
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.database import query_db, execute_db
@@ -14,6 +14,17 @@ from utils.security import validate_password_strength, check_account_access
 from services.otp_service import create_and_send_otp, verify_otp_code
 
 auth_bp = Blueprint('auth', __name__)
+
+
+def is_demo_account(email):
+    """
+    Check if DEMO_MODE is active and the given email matches the designated demo account.
+    Never bypasses authentication; strict, case-insensitive, single designated address only.
+    """
+    if not current_app.config.get('DEMO_MODE'):
+        return False
+    demo_email = (current_app.config.get('DEMO_ACCOUNT_EMAIL') or 'demo@smartlearn.com').lower().strip()
+    return bool(email and email.strip().lower() == demo_email)
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +117,19 @@ def register():
 
         # Create user in 'unverified' status with active flag (is_active=1)
         password_hash = generate_password_hash(password)
+
+        # Secure Demo Mode: if active for designated demo account, auto-approve and bypass email OTP
+        if is_demo_account(email):
+            user_id = execute_db(
+                "INSERT INTO users (name, email, password_hash, role, status, is_active) VALUES (?, ?, ?, ?, 'approved', 1)",
+                (name, email, password_hash, role)
+            )
+            user_row = query_db('SELECT * FROM users WHERE id = ?', [user_id], one=True)
+            user = current_app.User(user_row)
+            login_user(user)
+            flash('Demo mode active: Demo account registered and verified! Welcome to SmartLearn.', 'success')
+            return redirect(url_for('index'))
+
         user_id = execute_db(
             'INSERT INTO users (name, email, password_hash, role, status, is_active) VALUES (?, ?, ?, ?, ?, ?)',
             (name, email, password_hash, role, 'unverified', 1)
@@ -129,6 +153,16 @@ def register():
 def verify_otp():
     """Verify email address using a 6-digit OTP code."""
     email = session.get('verify_email') or request.args.get('email', '').strip().lower()
+
+    if is_demo_account(email):
+        execute_db("UPDATE users SET status = 'approved', is_active = 1 WHERE email = ?", [email])
+        user_row = query_db('SELECT * FROM users WHERE email = ?', [email], one=True)
+        if user_row:
+            user = current_app.User(user_row)
+            login_user(user)
+            session.pop('verify_email', None)
+            flash('Demo mode active: Demo account verified successfully!', 'success')
+            return redirect(url_for('index'))
 
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower() or email
@@ -223,6 +257,17 @@ def login():
             flash('Invalid email or password.', 'danger')
             return render_template('login.html', email=email)
 
+        # Secure Demo Mode: if active for the designated demo account, ensure approved access
+        if is_demo_account(email):
+            if user_row['status'] != 'approved':
+                execute_db("UPDATE users SET status = 'approved', is_active = 1 WHERE id = ?", [user_row['id']])
+                user_row = query_db('SELECT * FROM users WHERE id = ?', [user_row['id']], one=True)
+            execute_db('UPDATE users SET last_login = ? WHERE id = ?', [datetime.utcnow(), user_row['id']])
+            user = current_app.User(user_row)
+            login_user(user, remember=bool(remember))
+            flash(f'Demo mode active: Logged in as demo user {user.name}!', 'success')
+            return redirect(url_for('index'))
+
         # Validate account status (unverified, pending, rejected, suspended, approved)
         allowed, status, status_msg = check_account_access(user_row)
 
@@ -258,7 +303,6 @@ def login():
         execute_db('UPDATE users SET last_login = ? WHERE id = ?', [datetime.utcnow(), user_row['id']])
 
         # Build User object for session management
-        from flask import current_app
         user = current_app.User(user_row)
         login_user(user, remember=bool(remember))
 
