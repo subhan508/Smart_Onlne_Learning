@@ -285,5 +285,126 @@ def test_user_schema_server_defaults_and_registration(tmp_path):
         assert otp['otp_type'] == 'registration'
 
 
+def test_learning_progress_server_default_and_lesson_flow(tmp_path):
+    """Verify learning_progress and schema server_defaults and lesson view tracking."""
+    from database.models import LearningProgress, Course, Recommendation
+    from database.database import query_db, init_db
+
+    # Verify SQLAlchemy model column has server_default
+    lp_col = LearningProgress.__table__.columns['is_completed']
+    assert lp_col.server_default is not None
+    assert str(lp_col.server_default.arg) == '0'
+
+    course_appr_col = Course.__table__.columns['approval_status']
+    assert course_appr_col.server_default is not None
+    assert str(course_appr_col.server_default.arg) == 'approved'
+
+    rec_col = Recommendation.__table__.columns['is_dismissed']
+    assert rec_col.server_default is not None
+    assert str(rec_col.server_default.arg) == '0'
+
+    db_file = str(tmp_path / "test_flow.db")
+    app = create_app()
+    app.config['DATABASE'] = db_file
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file}"
+    app.config['TESTING'] = True
+    app.config['DEMO_MODE'] = True
+
+    with app.app_context():
+        init_db(app)
+        from database.seed import seed_all
+        seed_all(app)
+
+    client = app.test_client()
+
+    # 1. Login demo account
+    login_res = client.post('/login', data={'email': 'demo@smartlearn.com', 'password': 'Demo1234!'}, follow_redirects=True)
+    assert login_res.status_code == 200
+
+    # 2. Courses catalog
+    courses_res = client.get('/learn/courses')
+    assert courses_res.status_code == 200
+    assert b'Introduction to Python Programming' in courses_res.data
+
+    # 3. Course detail
+    course_detail_res = client.get('/learn/course/1')
+    assert course_detail_res.status_code == 200
+    assert b'Start Learning' in course_detail_res.data
+
+    # 4. Lesson view (verifies is_completed=0 progress creation without NotNullViolation)
+    lesson_res = client.get('/learn/lesson/1')
+    assert lesson_res.status_code == 200
+    assert b'webcamVideo' in lesson_res.data
+    assert b'emotionLabel' in lesson_res.data
+    assert b'confidenceValue' in lesson_res.data
+
+    with app.app_context():
+        lp = query_db('SELECT * FROM learning_progress WHERE lesson_id = 1', one=True)
+        assert lp is not None
+        assert lp['is_completed'] == 0
+
+    # 5. Mark lesson complete
+    complete_res = client.post('/learn/lesson/1/complete', follow_redirects=True)
+    assert complete_res.status_code == 200
+
+    with app.app_context():
+        lp_after = query_db('SELECT * FROM learning_progress WHERE lesson_id = 1', one=True)
+        assert lp_after is not None
+        assert lp_after['is_completed'] == 1
+
+
+def test_detect_emotion_api_endpoint(tmp_path):
+    """Verify emotion detection endpoint returns prediction, confidence, and stores logs."""
+    import base64
+    import cv2
+    import numpy as np
+    from database.database import query_db, init_db
+
+    db_file = str(tmp_path / "test_emotion_api.db")
+    app = create_app()
+    app.config['DATABASE'] = db_file
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file}"
+    app.config['TESTING'] = True
+    app.config['DEMO_MODE'] = True
+
+    with app.app_context():
+        init_db(app)
+        from database.seed import seed_all
+        seed_all(app)
+
+    client = app.test_client()
+
+    # Login demo student
+    client.post('/login', data={'email': 'demo@smartlearn.com', 'password': 'Demo1234!'}, follow_redirects=True)
+
+    # Synthetic face frame
+    img = np.full((240, 320, 3), 128, dtype=np.uint8)
+    cv2.ellipse(img, (160, 120), (50, 70), 0, 0, 360, (200, 200, 200), -1)
+    cv2.circle(img, (140, 100), 8, (50, 50, 50), -1)
+    cv2.circle(img, (180, 100), 8, (50, 50, 50), -1)
+    cv2.ellipse(img, (160, 150), (25, 10), 0, 0, 180, (50, 50, 50), 3)
+
+    _, buffer = cv2.imencode('.jpg', img)
+    b64_str = 'data:image/jpeg;base64,' + base64.b64encode(buffer).decode('utf-8')
+
+    res = client.post('/api/detect_emotion', json={
+        'image': b64_str,
+        'course_id': 1,
+        'lesson_id': 1
+    })
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data['success'] is True
+    assert 'emotion' in data
+    assert 'confidence' in data
+    assert 'recommendation' in data
+    assert 'engagement' in data
+
+    with app.app_context():
+        log = query_db('SELECT * FROM emotion_logs WHERE lesson_id = 1', one=True)
+        assert log is not None
+        assert log['emotion'] == data['emotion']
+
+
 
 

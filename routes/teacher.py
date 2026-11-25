@@ -197,7 +197,7 @@ def create_course():
             return render_template('teacher_course_form.html', course=None)
 
         course_id = execute_db(
-            'INSERT INTO courses (title, description, teacher_id, category, is_published) VALUES (?, ?, ?, ?, 1)',
+            "INSERT INTO courses (title, description, teacher_id, category, is_published, approval_status) VALUES (?, ?, ?, ?, 1, 'approved')",
             (title, description, current_user.id, category)
         )
         flash(f'Course "{title}" created successfully!', 'success')

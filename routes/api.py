@@ -125,8 +125,8 @@ def detect_emotion():
         # 9. Store recommendation if urgency is not low
         if recommendation['urgency'] != 'low':
             execute_db('''
-                INSERT INTO recommendations (student_id, course_id, lesson_id, emotion, recommendation, action_type)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO recommendations (student_id, course_id, lesson_id, emotion, recommendation, action_type, is_dismissed)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
             ''', (current_user.id, course_id, lesson_id,
                   prediction['emotion'], recommendation['message'], recommendation['action']))
 

@@ -259,8 +259,43 @@ def _migrate_existing_columns(db):
             if course_cols:
                 if 'approval_status' not in course_cols:
                     db.execute("ALTER TABLE courses ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'")
+                else:
+                    try:
+                        db.execute("ALTER TABLE courses ALTER COLUMN approval_status SET DEFAULT 'approved'")
+                        db.execute("UPDATE courses SET approval_status = 'approved' WHERE approval_status IS NULL")
+                    except Exception:
+                        pass
+                if 'is_published' in course_cols:
+                    try:
+                        db.execute("ALTER TABLE courses ALTER COLUMN is_published SET DEFAULT 0")
+                    except Exception:
+                        pass
                 if 'rejection_reason' not in course_cols:
                     db.execute("ALTER TABLE courses ADD COLUMN rejection_reason TEXT DEFAULT NULL")
+
+            cur = db.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'learning_progress'
+            """)
+            lp_cols = {row['column_name'] for row in cur.fetchall()}
+            if lp_cols and 'is_completed' in lp_cols:
+                try:
+                    db.execute("ALTER TABLE learning_progress ALTER COLUMN is_completed SET DEFAULT 0")
+                    db.execute("UPDATE learning_progress SET is_completed = 0 WHERE is_completed IS NULL")
+                except Exception:
+                    pass
+
+            cur = db.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'recommendations'
+            """)
+            rec_cols = {row['column_name'] for row in cur.fetchall()}
+            if rec_cols and 'is_dismissed' in rec_cols:
+                try:
+                    db.execute("ALTER TABLE recommendations ALTER COLUMN is_dismissed SET DEFAULT 0")
+                    db.execute("UPDATE recommendations SET is_dismissed = 0 WHERE is_dismissed IS NULL")
+                except Exception:
+                    pass
 
             cur = db.execute("""
                 SELECT column_name FROM information_schema.columns 

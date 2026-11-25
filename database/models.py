@@ -59,9 +59,9 @@ class Course(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     category = db.Column(db.String(100), default='General')
     thumbnail = db.Column(db.String(255), nullable=True)
-    approval_status = db.Column(db.String(20), nullable=False, default='approved')  # 'draft', 'pending_approval', 'approved', 'rejected'
+    approval_status = db.Column(db.String(20), nullable=False, default='approved', server_default='approved')  # 'draft', 'pending_approval', 'approved', 'rejected'
     rejection_reason = db.Column(db.Text, nullable=True)
-    is_published = db.Column(db.Integer, nullable=False, default=0)
+    is_published = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     lessons = db.relationship('Lesson', backref='course', lazy=True, cascade='all, delete-orphan', order_by='Lesson.order_number')
@@ -78,7 +78,7 @@ class Lesson(db.Model):
     description = db.Column(db.Text, nullable=True)
     video_url = db.Column(db.String(500), nullable=True)
     notes = db.Column(db.Text, nullable=True)
-    order_number = db.Column(db.Integer, nullable=False, default=1)
+    order_number = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -99,7 +99,7 @@ class LearningProgress(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     lesson_id = db.Column(db.Integer, db.ForeignKey('lessons.id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
-    is_completed = db.Column(db.Integer, nullable=False, default=0)
+    is_completed = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     last_accessed = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint('student_id', 'lesson_id', name='uq_student_lesson_progress'),)
 
@@ -134,7 +134,7 @@ class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), nullable=False)
     question_text = db.Column(db.Text, nullable=False)
-    order_number = db.Column(db.Integer, nullable=False, default=1)
+    order_number = db.Column(db.Integer, nullable=False, default=1, server_default='1')
 
     options = db.relationship('Option', backref='question', lazy=True, cascade='all, delete-orphan')
 
@@ -145,7 +145,7 @@ class Option(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), nullable=False)
     option_text = db.Column(db.String(500), nullable=False)
-    is_correct = db.Column(db.Integer, nullable=False, default=0)
+    is_correct = db.Column(db.Integer, nullable=False, default=0, server_default='0')
 
 
 class QuizAttempt(db.Model):
@@ -154,8 +154,8 @@ class QuizAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id'), nullable=False)
-    score = db.Column(db.Integer, nullable=False, default=0)
-    total_marks = db.Column(db.Integer, nullable=False, default=0)
+    score = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    total_marks = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     attempted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     answers = db.relationship('QuizAnswer', backref='attempt', lazy=True, cascade='all, delete-orphan')
@@ -168,7 +168,7 @@ class QuizAnswer(db.Model):
     attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id', ondelete='CASCADE'), nullable=False)
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
     selected_option_id = db.Column(db.Integer, db.ForeignKey('options.id'), nullable=True)
-    is_correct = db.Column(db.Integer, nullable=False, default=0)
+    is_correct = db.Column(db.Integer, nullable=False, default=0, server_default='0')
 
 
 class EmotionLog(db.Model):
@@ -179,7 +179,7 @@ class EmotionLog(db.Model):
     course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True)
     lesson_id = db.Column(db.Integer, db.ForeignKey('lessons.id'), nullable=True)
     emotion = db.Column(db.String(50), nullable=False)
-    confidence = db.Column(db.Float, nullable=False, default=0.0)
+    confidence = db.Column(db.Float, nullable=False, default=0.0, server_default='0.0')
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
@@ -192,8 +192,8 @@ class Recommendation(db.Model):
     lesson_id = db.Column(db.Integer, db.ForeignKey('lessons.id'), nullable=True)
     emotion = db.Column(db.String(50), nullable=False)
     recommendation = db.Column(db.Text, nullable=False)
-    action_type = db.Column(db.String(50), default='info')
-    is_dismissed = db.Column(db.Integer, nullable=False, default=0)
+    action_type = db.Column(db.String(50), default='info', server_default='info')
+    is_dismissed = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -204,8 +204,8 @@ class Notification(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    type = db.Column(db.String(50), nullable=False, default='info')  # 'info', 'success', 'warning', 'danger'
-    is_read = db.Column(db.Integer, nullable=False, default=0)
+    type = db.Column(db.String(50), nullable=False, default='info', server_default='info')  # 'info', 'success', 'warning', 'danger'
+    is_read = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     link = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

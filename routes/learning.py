@@ -165,7 +165,7 @@ def lesson_view(lesson_id):
         )
         if not existing_progress:
             execute_db(
-                'INSERT INTO learning_progress (student_id, lesson_id, course_id) VALUES (?, ?, ?)',
+                'INSERT INTO learning_progress (student_id, lesson_id, course_id, is_completed) VALUES (?, ?, ?, 0)',
                 (current_user.id, lesson_id, lesson['course_id'])
             )
 
