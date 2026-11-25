@@ -4,10 +4,52 @@ Loads settings from environment variables with sensible defaults.
 """
 
 import os
+import re
 from dotenv import load_dotenv
 
 # Load .env file if present
 load_dotenv()
+
+
+def normalize_database_url(raw_url, default_sqlite_path):
+    """
+    Safely normalize and validate database URL for SQLAlchemy and cloud deployments.
+    - Explicitly sets driver dialect to 'postgresql+psycopg2://' so SQLAlchemy loads
+      the installed psycopg2-binary driver and avoids driver mismatches.
+    - Strips surrounding whitespace and quotes (' or \") from environment variable definitions.
+    - Gracefully falls back to SQLite when DATABASE_URL is unset, empty, or whitespace.
+    - Validates connection string syntax and produces a clear, descriptive error message
+      instead of an obscure startup traceback.
+    """
+    if raw_url is None:
+        return f"sqlite:///{default_sqlite_path}"
+
+    cleaned = str(raw_url).strip().strip("'\"")
+    if not cleaned:
+        return f"sqlite:///{default_sqlite_path}"
+
+    # Handle Render/Railway legacy postgres:// scheme and standard postgresql://
+    # Map to postgresql+psycopg2:// so SQLAlchemy 2.0+ explicitly uses psycopg2
+    if cleaned.startswith('postgres://'):
+        cleaned = cleaned.replace('postgres://', 'postgresql+psycopg2://', 1)
+    elif cleaned.startswith('postgresql://'):
+        cleaned = cleaned.replace('postgresql://', 'postgresql+psycopg2://', 1)
+
+    # Validate with SQLAlchemy make_url
+    try:
+        from sqlalchemy.engine import make_url
+        parsed = make_url(cleaned)
+        if not parsed.drivername:
+            raise ValueError("Missing database scheme in DATABASE_URL")
+        return cleaned
+    except Exception as err:
+        raise ValueError(
+            f"Invalid DATABASE_URL configuration: {raw_url!r}. "
+            f"Failed to parse database connection string: {err}. "
+            f"For PostgreSQL on Render, ensure DATABASE_URL has the format "
+            f"'postgresql://user:password@host:port/database' or leave it unset to use local SQLite."
+        ) from err
+
 
 class Config:
     """Application configuration."""
@@ -19,21 +61,17 @@ class Config:
     FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
     APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
 
-    # Database
+    # Database path for local SQLite development
     DATABASE = os.environ.get('DATABASE', os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 'smart_learn.db'
     ))
 
     # SQLAlchemy / PostgreSQL Configuration
-    database_url = os.environ.get('DATABASE_URL')
-    if database_url:
-        # Handle Render/Railway legacy postgres:// scheme
-        if database_url.startswith('postgres://'):
-            database_url = database_url.replace('postgres://', 'postgresql://', 1)
-        SQLALCHEMY_DATABASE_URI = database_url
-    else:
-        SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE}"
-    DATABASE_URL = database_url
+    SQLALCHEMY_DATABASE_URI = normalize_database_url(
+        os.environ.get('DATABASE_URL'),
+        DATABASE
+    )
+    DATABASE_URL = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Mail / SMTP Configuration

@@ -13,13 +13,28 @@ from flask import g, current_app
 def is_postgres():
     """Check if the current application is configured to use PostgreSQL."""
     uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-    return uri.startswith('postgresql://') or uri.startswith('postgres://')
+    return uri.startswith(('postgresql://', 'postgres://', 'postgresql+'))
+
+
+class DBRow(dict):
+    """
+    Row object supporting both dictionary key access and integer index access,
+    mirroring the behavior of sqlite3.Row for PostgreSQL queries.
+    """
+    def __init__(self, mapping, values=None):
+        super().__init__(mapping)
+        self._values = tuple(values) if values is not None else tuple(mapping.values())
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return super().__getitem__(key)
 
 
 class PostgresCursorWrapper:
     """
-    Wraps a psycopg2 cursor to provide a sqlite3-compatible interface:
-    - Dict-like row access (via psycopg2.extras.DictCursor)
+    Wraps a database cursor to provide a sqlite3-compatible interface:
+    - Dict-like and index-based row access (via DBRow or DictRow)
     - lastrowid property populated on INSERT statements
     - rowcount property
     - Standard fetchone(), fetchall(), close(), iteration
@@ -28,11 +43,29 @@ class PostgresCursorWrapper:
         self._cursor = cursor
         self.lastrowid = lastrowid
 
+    def _wrap(self, row):
+        if row is None:
+            return None
+        if isinstance(row, DBRow):
+            return row
+        # If it's a psycopg2 DictRow, it already supports row['id'] and row[0]
+        if hasattr(row, 'keys') and hasattr(row, '__getitem__'):
+            try:
+                _ = row[0]
+                return row
+            except (KeyError, TypeError):
+                return DBRow(row)
+        if hasattr(self._cursor, 'description') and self._cursor.description:
+            cols = [col[0] if isinstance(col, tuple) else col.name for col in self._cursor.description]
+            return DBRow(dict(zip(cols, row)), row)
+        return row
+
     def fetchone(self):
-        return self._cursor.fetchone()
+        return self._wrap(self._cursor.fetchone())
 
     def fetchall(self):
-        return self._cursor.fetchall()
+        rows = self._cursor.fetchall()
+        return [self._wrap(r) for r in rows] if rows else []
 
     def close(self):
         self._cursor.close()
@@ -42,28 +75,32 @@ class PostgresCursorWrapper:
         return self._cursor.rowcount
 
     def __iter__(self):
-        return iter(self._cursor)
+        for row in self._cursor:
+            yield self._wrap(row)
 
 
 class PostgresDBWrapper:
     """
-    Wraps a psycopg2 connection to provide a sqlite3.Connection-compatible interface:
+    Wraps a PostgreSQL connection (psycopg2 or psycopg) to provide a sqlite3.Connection-compatible interface:
     - Automatic translation of '?' parameter placeholders to '%s'
     - Automatic RETURNING id capture for INSERT statements so cursor.lastrowid works
     - commit(), rollback(), close()
     - executescript() for running multiple SQL statements
     """
-    def __init__(self, conn):
+    def __init__(self, conn, driver='psycopg2'):
         self._conn = conn
+        self.driver = driver
 
     def execute(self, query, args=()):
-        import psycopg2.extras
-
-        # Convert SQLite '?' placeholders to psycopg2 '%s'
+        # Convert SQLite '?' placeholders to PostgreSQL '%s'
         pg_query = query.replace('?', '%s')
         args_tuple = tuple(args) if args is not None else ()
 
-        cur = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if self.driver == 'psycopg2':
+            import psycopg2.extras
+            cur = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        else:
+            cur = self._conn.cursor()
 
         # Check if INSERT statement without RETURNING clause
         is_insert = bool(re.search(r'^\s*INSERT\s+INTO\b', pg_query, re.IGNORECASE))
@@ -75,12 +112,31 @@ class PostgresDBWrapper:
             try:
                 cur.execute(pg_query_with_returning, args_tuple)
                 row = cur.fetchone()
-                lastrowid = row['id'] if row and 'id' in row.keys() else (row[0] if row else None)
+                lastrowid = None
+                if row is not None:
+                    if hasattr(row, 'keys') and 'id' in row.keys():
+                        lastrowid = row['id']
+                    elif isinstance(row, dict):
+                        lastrowid = row.get('id')
+                    elif isinstance(row, (tuple, list)):
+                        lastrowid = row[0]
+                    else:
+                        try:
+                            lastrowid = row[0]
+                        except Exception:
+                            lastrowid = None
                 return PostgresCursorWrapper(cur, lastrowid=lastrowid)
             except Exception:
                 # Fallback if table doesn't have an 'id' column
-                self._conn.rollback()
-                cur = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+                if self.driver == 'psycopg2':
+                    import psycopg2.extras
+                    cur = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                else:
+                    cur = self._conn.cursor()
                 cur.execute(pg_query, args_tuple)
                 return PostgresCursorWrapper(cur)
         else:
@@ -112,10 +168,19 @@ def get_db():
     """
     if 'db' not in g:
         if is_postgres():
-            import psycopg2
-            db_url = current_app.config['SQLALCHEMY_DATABASE_URI']
-            conn = psycopg2.connect(db_url)
-            g.db = PostgresDBWrapper(conn)
+            raw_url = current_app.config['SQLALCHEMY_DATABASE_URI']
+            # Convert SQLAlchemy dialect format (postgresql+psycopg2://) to libpq format (postgresql://)
+            conn_url = re.sub(r'^postgresql\+[a-zA-Z0-9_]+://', 'postgresql://', raw_url)
+            # Try psycopg2 first (standard production driver), fallback to psycopg (v3)
+            try:
+                import psycopg2
+                import psycopg2.extras
+                conn = psycopg2.connect(conn_url)
+                g.db = PostgresDBWrapper(conn, driver='psycopg2')
+            except ImportError:
+                import psycopg
+                conn = psycopg.connect(conn_url)
+                g.db = PostgresDBWrapper(conn, driver='psycopg')
         else:
             g.db = sqlite3.connect(
                 current_app.config['DATABASE'],

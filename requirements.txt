@@ -6,8 +6,8 @@ flask-login>=0.6.3
 Flask-SQLAlchemy>=3.1.1
 SQLAlchemy>=2.0.0
 
-# Official PostgreSQL Driver for SQLAlchemy 2.0+ & Python 3.11+
-psycopg[binary]>=3.1.18
+# PostgreSQL Driver (Consistent between SQLAlchemy & custom query layer)
+psycopg2-binary>=2.9.9
 
 email-validator>=2.0.0
 python-dotenv>=1.1.0
