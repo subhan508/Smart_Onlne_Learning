@@ -32,10 +32,14 @@ def create_app(config_class=Config):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     # -----------------------------------------------------------------------
-    # Initialize SQLAlchemy ORM
+    # Initialize SQLAlchemy ORM & Database Schema
     # -----------------------------------------------------------------------
     from database.models import db
     db.init_app(app)
+
+    # Ensure all tables and migrations exist on server startup (not per request)
+    from database.database import ensure_database_initialized
+    ensure_database_initialized(app)
 
     # -----------------------------------------------------------------------
     # Database teardown — close connection at end of each request
@@ -170,14 +174,6 @@ def create_app(config_class=Config):
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
     app = create_app()
-    # Initialize DB if it doesn't exist yet
-    db_path = app.config.get('DATABASE', 'smart_learn.db')
-    if not os.path.exists(db_path):
-        init_db(app)
-        from database.seed import seed_all
-        seed_all(app)
-        print('[INFO] Database created and seeded with demo data.')
-    
     port = int(os.environ.get('PORT', 5000))
     import socket
     try:

@@ -10,6 +10,22 @@ import sqlite3
 from flask import g, current_app
 
 
+POSTGRES_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+    "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)",
+    "CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email)",
+    "CREATE INDEX IF NOT EXISTS idx_emotion_logs_student ON emotion_logs(student_id)",
+    "CREATE INDEX IF NOT EXISTS idx_emotion_logs_timestamp ON emotion_logs(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_quiz_attempts_student ON quiz_attempts(student_id)",
+    "CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id)",
+    "CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)",
+    "CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id)",
+    "CREATE INDEX IF NOT EXISTS idx_learning_progress_student ON learning_progress(student_id)",
+    "CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action, created_at)"
+]
+
+
 def is_postgres():
     """Check if the current application is configured to use PostgreSQL."""
     uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
@@ -270,8 +286,9 @@ def _migrate_existing_columns(db):
 def init_db(app=None):
     """
     Initialise the database by creating all tables and running column migrations.
-    For PostgreSQL: uses SQLAlchemy models to ensure clean DDL with serial IDs.
-    For SQLite: executes schema.sql.
+    For PostgreSQL: uses SQLAlchemy models to ensure clean DDL with serial IDs,
+    creates required indexes, and executes column migrations.
+    For SQLite: executes schema.sql and runs column migrations.
     """
     if app is None:
         app = current_app._get_current_object()
@@ -281,6 +298,11 @@ def init_db(app=None):
             from database.models import db as sa_db
             sa_db.create_all()
             db = get_db()
+            for idx_sql in POSTGRES_INDEXES:
+                try:
+                    db.execute(idx_sql)
+                except Exception as e:
+                    pass
             _migrate_existing_columns(db)
             db.commit()
             close_db()
@@ -293,6 +315,40 @@ def init_db(app=None):
             _migrate_existing_columns(db)
             db.commit()
             close_db()
+
+
+def ensure_database_initialized(app):
+    """
+    Ensure all database tables exist and are properly migrated.
+    Executed once during application startup in an app context.
+    Safe, idempotent, and non-destructive:
+    - Never drops existing tables or deletes existing data.
+    - Creates missing tables with proper constraints and indexes.
+    - Runs column migrations if upgrading from an older schema.
+    - Automatically seeds initial accounts if the database is completely empty.
+    """
+    if app.config.get('TESTING'):
+        # In test environments, test fixtures manage their own table lifecycle
+        return
+
+    with app.app_context():
+        try:
+            init_db(app)
+
+            # Auto-seed if database is fresh (no users exist)
+            try:
+                user_check = query_db("SELECT COUNT(*) as cnt FROM users", one=True)
+                if user_check and user_check['cnt'] == 0:
+                    from database.seed import seed_all
+                    seed_all(app)
+                    print("[INFO] Fresh database detected. Seeded default admin, teachers, students, and demo courses.")
+            except Exception as seed_err:
+                print(f"[DB Warning] Auto-seed check notice: {seed_err}")
+
+            print("[INFO] Database initialization and schema verification complete.")
+        except Exception as err:
+            print(f"[DB Error] Failed to initialize database on startup: {err}")
+            raise
 
 
 def query_db(query, args=(), one=False):
