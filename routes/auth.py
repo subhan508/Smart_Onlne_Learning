@@ -115,6 +115,10 @@ def register():
         success, msg, _ = create_and_send_otp(email, user_id=user_id, otp_type='registration')
         session['verify_email'] = email
 
+        if not success:
+            flash(f'Account created, but email delivery failed: {msg}. Please check your email settings or click "Resend Code".', 'warning')
+            return redirect(url_for('auth.verify_otp'))
+
         flash('Registration initiated! Please enter the 6-digit verification code sent to your email.', 'info')
         return redirect(url_for('auth.verify_otp'))
 
@@ -225,8 +229,11 @@ def login():
         if status == 'unverified':
             session['verify_email'] = email
             # Resend OTP if needed
-            create_and_send_otp(email, user_id=user_row['id'], otp_type='registration')
-            flash('Your email is not verified yet. We have sent a verification code to your email.', 'warning')
+            otp_sent, otp_msg, _ = create_and_send_otp(email, user_id=user_row['id'], otp_type='registration')
+            if not otp_sent:
+                flash(f'Your email is not verified yet. Delivery note: {otp_msg}', 'warning')
+            else:
+                flash('Your email is not verified yet. We have sent a verification code to your email.', 'warning')
             return redirect(url_for('auth.verify_otp'))
 
         if status == 'pending_approval':
@@ -292,7 +299,10 @@ def forgot_password():
 
         user = query_db('SELECT id, email FROM users WHERE email = ?', [email], one=True)
         if user:
-            create_and_send_otp(email, user_id=user['id'], otp_type='password_reset')
+            otp_sent, otp_msg, _ = create_and_send_otp(email, user_id=user['id'], otp_type='password_reset')
+            if not otp_sent:
+                flash(f'Failed to send password reset code: {otp_msg}', 'danger')
+                return render_template('forgot_password.html')
 
         session['reset_email'] = email
         flash('If an account exists with this email, a password reset code has been sent.', 'info')

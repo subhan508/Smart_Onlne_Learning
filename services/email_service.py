@@ -1,23 +1,106 @@
 """
 Email Notification Service for SmartLearn.
-Supports standard SMTP (Gmail, SendGrid, Mailgun, Amazon SES) with automatic
-safe console/logger fallback in development and testing environments.
+Supports:
+1. Resend REST API (HTTP-based, recommended for cloud platforms like Render where outbound SMTP is blocked)
+2. Standard SMTP (Gmail, SendGrid, Amazon SES) as fallback when RESEND_API_KEY is not set
+3. Automatic safe console logging for development and test environments
 """
 
+import json
 import smtplib
-from email.mime.text import MIMEText
+import urllib.error
+import urllib.request
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from flask import current_app
+
+
+def _send_via_resend(api_key, from_email, to_email, subject, body_html, body_text=None):
+    """
+    Send an email via the Resend REST API using urllib.request (zero extra dependencies).
+    """
+    url = "https://api.resend.com/emails"
+    payload = {
+        "from": from_email,
+        "to": [to_email] if isinstance(to_email, str) else to_email,
+        "subject": subject,
+        "html": body_html,
+    }
+    if body_text:
+        payload["text"] = body_text
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "SmartLearn/1.0"
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_body = response.read().decode("utf-8")
+            res_data = json.loads(res_body) if res_body else {}
+            email_id = res_data.get("id", "ok")
+            current_app.logger.info(f"[Resend] Email delivered to {to_email} (ID: {email_id})")
+            return True, f"Email sent via Resend (ID: {email_id})"
+    except urllib.error.HTTPError as e:
+        error_msg = f"HTTP {e.code}: {e.reason}"
+        try:
+            err_body = e.read().decode("utf-8")
+            err_json = json.loads(err_body)
+            if "message" in err_json:
+                error_msg = f"{err_json['message']} (HTTP {e.code})"
+        except Exception:
+            pass
+        current_app.logger.error(f"[Resend Error] Failed to send email to {to_email}: {error_msg}")
+        return False, error_msg
+    except Exception as e:
+        current_app.logger.error(f"[Resend Error] Network exception sending to {to_email}: {e}")
+        return False, str(e)
 
 
 def send_email(to_email, subject, body_html, body_text=None):
     """
-    Send an email via configured SMTP server.
-    If SMTP credentials are not configured (local dev/test), logs to console safely.
+    Send an email via configured provider:
+    1. Resend API (HTTP-based, recommended for cloud platforms like Render where SMTP ports are blocked).
+    2. SMTP Server (Gmail, SendGrid, etc. if RESEND_API_KEY is not set).
+    3. Console / Logger simulation (if in TESTING mode or no credentials are configured).
 
     Returns:
         tuple (success: bool, message: str)
     """
+    # If running in testing mode, simulate delivery
+    if current_app.config.get('TESTING'):
+        return True, "Simulated email dispatch (test mode)"
+
+    resend_api_key = (current_app.config.get('RESEND_API_KEY') or '').strip()
+
+    # Priority 1: Resend HTTP API (avoids Render SMTP port blocks)
+    if resend_api_key:
+        from_sender = (current_app.config.get('RESEND_FROM_EMAIL') or '').strip()
+        if not from_sender:
+            configured_sender = (current_app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
+            # If sender is not the default dummy noreply@smartlearn.com, use it
+            if configured_sender and not any(dummy in configured_sender for dummy in ('@smartlearn.com', '@example.com')):
+                from_sender = configured_sender
+            else:
+                from_sender = 'SmartLearn <onboarding@resend.dev>'
+
+        return _send_via_resend(
+            api_key=resend_api_key,
+            from_email=from_sender,
+            to_email=to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text
+        )
+
+    # Priority 2: Standard SMTP Server Fallback
     server_host = current_app.config.get('MAIL_SERVER')
     server_port = current_app.config.get('MAIL_PORT', 587)
     use_tls = current_app.config.get('MAIL_USE_TLS', True)
@@ -26,15 +109,14 @@ def send_email(to_email, subject, body_html, body_text=None):
     password = current_app.config.get('MAIL_PASSWORD', '')
     sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@smartlearn.com')
 
-    # If running in testing mode or credentials are not configured, simulate delivery
-    if current_app.config.get('TESTING') or not username or not password:
+    if not username or not password or not server_host:
         print(f"\n==================== [DEVELOPMENT EMAIL DISPATCH] ====================")
         print(f"To:      {to_email}")
         print(f"Subject: {subject}")
         print(f"From:    {sender}")
         print(f"Content:\n{body_text or body_html}")
         print(f"======================================================================\n")
-        return True, "Simulated email dispatch (dev mode)"
+        return True, "Simulated email dispatch (dev mode: no email provider configured)"
 
     try:
         msg = MIMEMultipart('alternative')
@@ -58,9 +140,10 @@ def send_email(to_email, subject, body_html, body_text=None):
                 server.login(username, password)
                 server.sendmail(sender, [to_email], msg.as_string())
 
-        return True, "Email sent successfully."
+        return True, "Email sent successfully via SMTP."
     except Exception as e:
-        print(f"[Email Error] Failed to send email to {to_email}: {e}")
+        current_app.logger.error(f"[Email Error] Failed to send email via SMTP to {to_email}: {e}")
+        print(f"[Email Error] Failed to send email via SMTP to {to_email}: {e}")
         return False, str(e)
 
 

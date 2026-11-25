@@ -253,3 +253,76 @@ class TestForgotPasswordFlow:
         # Verify login works with new password
         login_resp = client.post('/login', data={'email': 'kelly@test.com', 'password': 'BrandNewP@ss123!'}, follow_redirects=True)
         assert b'Welcome back, Kelly!' in login_resp.data
+
+
+class TestResendEmailService:
+    """Verify Resend HTTP email dispatch, header formation, and error handling."""
+
+    def test_resend_api_dispatch_success(self, app):
+        from unittest.mock import patch, MagicMock
+        from services.email_service import _send_via_resend
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"id": "msg_12345"}'
+        mock_resp.__enter__.return_value = mock_resp
+
+        with app.app_context(), patch('urllib.request.urlopen', return_value=mock_resp) as mock_urlopen:
+            success, msg = _send_via_resend(
+                api_key="re_test_key",
+                from_email="SmartLearn <onboarding@resend.dev>",
+                to_email="student@example.com",
+                subject="Test Subject",
+                body_html="<p>Test</p>",
+                body_text="Test"
+            )
+
+            assert success is True
+            assert "msg_12345" in msg
+            assert mock_urlopen.called
+            call_req = mock_urlopen.call_args[0][0]
+            assert call_req.get_full_url() == "https://api.resend.com/emails"
+            assert call_req.headers['Authorization'] == "Bearer re_test_key"
+
+    def test_resend_api_dispatch_http_error(self, app):
+        from unittest.mock import patch
+        from services.email_service import _send_via_resend
+        import urllib.error
+        import io
+
+        err_stream = io.BytesIO(b'{"message": "API key invalid", "name": "validation_error"}')
+        http_err = urllib.error.HTTPError("https://api.resend.com/emails", 401, "Unauthorized", {}, err_stream)
+
+        with app.app_context(), patch('urllib.request.urlopen', side_effect=http_err):
+            success, msg = _send_via_resend(
+                api_key="re_invalid_key",
+                from_email="onboarding@resend.dev",
+                to_email="student@example.com",
+                subject="Test",
+                body_html="<p>Hi</p>"
+            )
+
+            assert success is False
+            assert "API key invalid" in msg
+            assert "401" in msg
+
+    def test_send_email_uses_resend_when_configured(self, app):
+        from unittest.mock import patch
+        from services.email_service import send_email
+
+        with app.app_context():
+            app.config['TESTING'] = False
+            app.config['RESEND_API_KEY'] = 're_live_key'
+            app.config['RESEND_FROM_EMAIL'] = 'SmartLearn <noreply@domain.com>'
+
+            with patch('services.email_service._send_via_resend', return_value=(True, "Sent via Resend")) as mock_send:
+                success, msg = send_email("user@test.com", "Subject", "<p>Hello</p>")
+                assert success is True
+                mock_send.assert_called_once_with(
+                    api_key="re_live_key",
+                    from_email="SmartLearn <noreply@domain.com>",
+                    to_email="user@test.com",
+                    subject="Subject",
+                    body_html="<p>Hello</p>",
+                    body_text=None
+                )
+

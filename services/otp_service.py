@@ -71,7 +71,9 @@ def create_and_send_otp(email, user_id=None, otp_type="registration"):
     ''', [user_id, email, code_hash, otp_type, expires_at, max_attempts, now])
 
     # 4. Dispatch Email
-    send_otp_email(email, code, purpose=otp_type)
+    sent, send_err = send_otp_email(email, code, purpose=otp_type)
+    if not sent:
+        return False, f"Could not deliver verification email: {send_err}", None
 
     return True, f"A 6-digit verification code has been sent to {email}.", code
 
