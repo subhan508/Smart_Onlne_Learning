@@ -53,6 +53,17 @@ def _send_via_resend(api_key, from_email, to_email, subject, body_html, body_tex
                 error_msg = f"{err_json['message']} (HTTP {e.code})"
         except Exception:
             pass
+
+        if e.code == 403:
+            current_app.logger.warning(
+                "[Resend 403 Restriction] Recipient rejected in Resend testing mode. "
+                "Resend sandbox only allows sending to the account owner's email address. "
+                "To deliver OTPs to external users, verify a custom domain at resend.com/domains "
+                "and set EMAIL_FROM to an address on that domain."
+            )
+            if "verify your domain" not in error_msg.lower():
+                error_msg += " (Resend testing mode only permits sending to your own account email. Please verify your domain in Resend)."
+
         current_app.logger.error(f"[Resend Error] Failed to send email to {to_email}: {error_msg}")
         return False, error_msg
     except Exception as e:
@@ -78,12 +89,21 @@ def send_email(to_email, subject, body_html, body_text=None):
         or current_app.config.get('RESEND_FROM_EMAIL')
         or current_app.config.get('MAIL_DEFAULT_SENDER')
         or 'SmartLearn <onboarding@resend.dev>'
-    ).strip()
+    ).strip('\'"')
 
-    # If the sender is still the dummy default, use Resend's default onboarding address
-    if not from_email or any(dummy in from_email for dummy in ('@smartlearn.com', '@example.com')):
-        if not (current_app.config.get('EMAIL_FROM') or current_app.config.get('RESEND_FROM_EMAIL')):
-            from_email = 'SmartLearn <onboarding@resend.dev>'
+    # If from_email is missing or empty, use fallback
+    if not from_email:
+        from_email = 'SmartLearn <onboarding@resend.dev>'
+
+    # If from_email is still using the testing domain onboarding@resend.dev, log an advisory
+    if 'onboarding@resend.dev' in from_email:
+        current_app.logger.warning(
+            "[Resend Sandbox Warning] Outbound email sender is '%s'. "
+            "In Resend testing mode, emails are ONLY permitted to the account owner's email. "
+            "To send OTPs to any user in production, verify your domain in Resend (resend.com/domains) "
+            "and set EMAIL_FROM in your Render environment variables.",
+            from_email
+        )
 
     # 2. Resend API Key is set -> Send via Resend HTTPS API
     if api_key:

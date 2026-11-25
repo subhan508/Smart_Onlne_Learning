@@ -305,6 +305,28 @@ class TestResendEmailService:
             assert "API key invalid" in msg
             assert "401" in msg
 
+    def test_resend_api_dispatch_403_testing_mode_error(self, app):
+        from unittest.mock import patch
+        from services.email_service import _send_via_resend
+        import urllib.error
+        import io
+
+        err_stream = io.BytesIO(b'{"message": "You can only send testing emails to your own email address. To send to other addresses, please verify your domain.", "name": "validation_error"}')
+        http_err = urllib.error.HTTPError("https://api.resend.com/emails", 403, "Forbidden", {}, err_stream)
+
+        with app.app_context(), patch('urllib.request.urlopen', side_effect=http_err):
+            success, msg = _send_via_resend(
+                api_key="re_sandbox_key",
+                from_email="onboarding@resend.dev",
+                to_email="external_student@example.com",
+                subject="Test",
+                body_html="<p>Hi</p>"
+            )
+
+            assert success is False
+            assert "verify your domain" in msg
+            assert "403" in msg
+
     def test_send_email_uses_resend_when_configured(self, app):
         from unittest.mock import patch
         from services.email_service import send_email

@@ -81,7 +81,7 @@ class Config:
         or os.environ.get('RESEND_FROM_EMAIL', '').strip()
         or os.environ.get('MAIL_DEFAULT_SENDER', '').strip()
         or 'SmartLearn <onboarding@resend.dev>'
-    )
+    ).strip('\'"')
     RESEND_FROM_EMAIL = EMAIL_FROM
 
     # Legacy Mail / SMTP Settings (Optional fallback)
