@@ -312,7 +312,7 @@ class TestResendEmailService:
         with app.app_context():
             app.config['TESTING'] = False
             app.config['RESEND_API_KEY'] = 're_live_key'
-            app.config['RESEND_FROM_EMAIL'] = 'SmartLearn <noreply@domain.com>'
+            app.config['EMAIL_FROM'] = 'SmartLearn <noreply@domain.com>'
 
             with patch('services.email_service._send_via_resend', return_value=(True, "Sent via Resend")) as mock_send:
                 success, msg = send_email("user@test.com", "Subject", "<p>Hello</p>")
@@ -325,4 +325,17 @@ class TestResendEmailService:
                     body_html="<p>Hello</p>",
                     body_text=None
                 )
+
+    def test_send_email_fails_fast_in_production_when_resend_key_missing(self, app, monkeypatch):
+        from services.email_service import send_email
+
+        with app.app_context():
+            app.config['TESTING'] = False
+            app.config['RESEND_API_KEY'] = ''
+            monkeypatch.setenv('RENDER', 'true')
+
+            success, msg = send_email("user@test.com", "Subject", "<p>Hello</p>")
+            assert success is False
+            assert "RESEND_API_KEY is not configured" in msg
+            assert "Render Dashboard" in msg
 

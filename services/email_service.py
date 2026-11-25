@@ -1,17 +1,13 @@
 """
 Email Notification Service for SmartLearn.
-Supports:
-1. Resend REST API (HTTP-based, recommended for cloud platforms like Render where outbound SMTP is blocked)
-2. Standard SMTP (Gmail, SendGrid, Amazon SES) as fallback when RESEND_API_KEY is not set
-3. Automatic safe console logging for development and test environments
+Powered by Resend REST API (HTTPS).
+Avoids blocked SMTP ports (25, 465, 587) on cloud platforms like Render.
 """
 
 import json
-import smtplib
+import os
 import urllib.error
 import urllib.request
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from flask import current_app
 
 
@@ -66,85 +62,65 @@ def _send_via_resend(api_key, from_email, to_email, subject, body_html, body_tex
 
 def send_email(to_email, subject, body_html, body_text=None):
     """
-    Send an email via configured provider:
-    1. Resend API (HTTP-based, recommended for cloud platforms like Render where SMTP ports are blocked).
-    2. SMTP Server (Gmail, SendGrid, etc. if RESEND_API_KEY is not set).
-    3. Console / Logger simulation (if in TESTING mode or no credentials are configured).
+    Send an email via Resend HTTPS REST API.
+    Simulates delivery safely in TESTING or local dev mode if RESEND_API_KEY is not configured.
 
     Returns:
         tuple (success: bool, message: str)
     """
-    # If running in testing mode, simulate delivery
+    # 1. Automated test mode
     if current_app.config.get('TESTING'):
         return True, "Simulated email dispatch (test mode)"
 
-    resend_api_key = (current_app.config.get('RESEND_API_KEY') or '').strip()
+    api_key = (current_app.config.get('RESEND_API_KEY') or '').strip()
+    from_email = (
+        current_app.config.get('EMAIL_FROM')
+        or current_app.config.get('RESEND_FROM_EMAIL')
+        or current_app.config.get('MAIL_DEFAULT_SENDER')
+        or 'SmartLearn <onboarding@resend.dev>'
+    ).strip()
 
-    # Priority 1: Resend HTTP API (avoids Render SMTP port blocks)
-    if resend_api_key:
-        from_sender = (current_app.config.get('RESEND_FROM_EMAIL') or '').strip()
-        if not from_sender:
-            configured_sender = (current_app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
-            # If sender is not the default dummy noreply@smartlearn.com, use it
-            if configured_sender and not any(dummy in configured_sender for dummy in ('@smartlearn.com', '@example.com')):
-                from_sender = configured_sender
-            else:
-                from_sender = 'SmartLearn <onboarding@resend.dev>'
+    # If the sender is still the dummy default, use Resend's default onboarding address
+    if not from_email or any(dummy in from_email for dummy in ('@smartlearn.com', '@example.com')):
+        if not (current_app.config.get('EMAIL_FROM') or current_app.config.get('RESEND_FROM_EMAIL')):
+            from_email = 'SmartLearn <onboarding@resend.dev>'
 
+    # 2. Resend API Key is set -> Send via Resend HTTPS API
+    if api_key:
         return _send_via_resend(
-            api_key=resend_api_key,
-            from_email=from_sender,
+            api_key=api_key,
+            from_email=from_email,
             to_email=to_email,
             subject=subject,
             body_html=body_html,
             body_text=body_text
         )
 
-    # Priority 2: Standard SMTP Server Fallback
-    server_host = current_app.config.get('MAIL_SERVER')
-    server_port = current_app.config.get('MAIL_PORT', 587)
-    use_tls = current_app.config.get('MAIL_USE_TLS', True)
-    use_ssl = current_app.config.get('MAIL_USE_SSL', False)
-    username = current_app.config.get('MAIL_USERNAME', '')
-    password = current_app.config.get('MAIL_PASSWORD', '')
-    sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@smartlearn.com')
+    # 3. No RESEND_API_KEY configured:
+    # On Render / cloud production, outbound SMTP is blocked. Never try raw SMTP sockets that cause [Errno 101].
+    is_cloud_or_prod = (
+        current_app.config.get('ENV') == 'production'
+        or os.environ.get('RENDER') == 'true'
+        or os.environ.get('FLASK_ENV') == 'production'
+        or not current_app.debug
+    )
 
-    if not username or not password or not server_host:
-        print(f"\n==================== [DEVELOPMENT EMAIL DISPATCH] ====================")
-        print(f"To:      {to_email}")
-        print(f"Subject: {subject}")
-        print(f"From:    {sender}")
-        print(f"Content:\n{body_text or body_html}")
-        print(f"======================================================================\n")
-        return True, "Simulated email dispatch (dev mode: no email provider configured)"
+    if is_cloud_or_prod:
+        err = (
+            "Email delivery failed: RESEND_API_KEY is not configured. "
+            "Outbound SMTP is blocked on Render. Please configure RESEND_API_KEY in the Render Dashboard."
+        )
+        current_app.logger.error(f"[Email Error] {err}")
+        return False, err
 
-    try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = sender
-        msg['To'] = to_email
-
-        if body_text:
-            msg.attach(MIMEText(body_text, 'plain'))
-        if body_html:
-            msg.attach(MIMEText(body_html, 'html'))
-
-        if use_ssl:
-            with smtplib.SMTP_SSL(server_host, server_port, timeout=10) as server:
-                server.login(username, password)
-                server.sendmail(sender, [to_email], msg.as_string())
-        else:
-            with smtplib.SMTP(server_host, server_port, timeout=10) as server:
-                if use_tls:
-                    server.starttls()
-                server.login(username, password)
-                server.sendmail(sender, [to_email], msg.as_string())
-
-        return True, "Email sent successfully via SMTP."
-    except Exception as e:
-        current_app.logger.error(f"[Email Error] Failed to send email via SMTP to {to_email}: {e}")
-        print(f"[Email Error] Failed to send email via SMTP to {to_email}: {e}")
-        return False, str(e)
+    # 4. Local development mode without API key: log safely to console
+    print(f"\n==================== [LOCAL DEV EMAIL DISPATCH] ====================")
+    print(f"To:      {to_email}")
+    print(f"From:    {from_email}")
+    print(f"Subject: {subject}")
+    print(f"Content:\n{body_text or body_html}")
+    print(f"====================================================================\n")
+    return True, "Simulated email dispatch (local dev mode: RESEND_API_KEY not configured)"
 
 
 def send_otp_email(to_email, otp_code, purpose="registration"):

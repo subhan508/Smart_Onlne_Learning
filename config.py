@@ -74,13 +74,17 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Email / Delivery Configuration
-    # On Render and cloud platforms, outbound SMTP ports (25, 465, 587) are blocked.
-    # An HTTP API service like Resend (https://resend.com) is recommended.
+    # Resend Email API Configuration (HTTPS - required for Render / cloud deployments)
     RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
-    RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', '').strip()
+    EMAIL_FROM = (
+        os.environ.get('EMAIL_FROM', '').strip()
+        or os.environ.get('RESEND_FROM_EMAIL', '').strip()
+        or os.environ.get('MAIL_DEFAULT_SENDER', '').strip()
+        or 'SmartLearn <onboarding@resend.dev>'
+    )
+    RESEND_FROM_EMAIL = EMAIL_FROM
 
-    # Mail / SMTP Configuration (Fallback if SMTP is used)
+    # Legacy Mail / SMTP Settings (Optional fallback)
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
     MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', '1', 'yes')
